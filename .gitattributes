@@ -2,5 +2,6 @@
 *.ipynb filter=lfs diff=lfs merge=lfs -text
 *.svg filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
+*.bam filter=lfs diff=lfs merge=lfs -text
 *.bam !text !filter !merge !diff
 *.gz !text !filter !merge !diff
