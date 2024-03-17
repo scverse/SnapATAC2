@@ -265,10 +265,16 @@ where
         result.par_sort_unstable_by(|a, b| BEDLike::compare(a, b));
         result
     } else {
-        rm_dup_single(reads).map(move |(r, c)| {
-            let ref_id: usize = r.reference_sequence_id.try_into().unwrap();
-            Fragment {
-                chrom: header.reference_sequences().get_index(ref_id).unwrap().0.to_string(),
+        let mut fragments = Vec::new();
+        for (r, c) in rm_dup_single(reads) {
+            let ref_id: usize = r.reference_sequence_id.into();
+            let frag = Fragment {
+                chrom: header
+                    .reference_sequences()
+                    .get_index(ref_id)
+                    .unwrap()
+                    .0
+                    .to_string(),
                 start: r.alignment_start as u64 - 1,
                 end: r.alignment_end as u64,
                 barcode: Some(r.barcode.as_ref().unwrap().clone()),
@@ -278,8 +284,25 @@ where
                 } else {
                     Strand::Forward
                 }),
-            }
-        }).collect()
+            };
+            match r.skips {
+                None => {
+                    fragments.push(frag);
+                }
+                Some(skips) => {
+                    let mut offset = frag.start;
+                    for (match_len, skip_len) in skips {
+                        let mut f = frag.clone();
+                        f.start = offset;
+                        f.end = offset + match_len;
+                        // Update the offset
+                        offset = f.end + skip_len;
+                        fragments.push(f);
+                    }
+                }
+            };
+        }
+        fragments
     }
 }
 
