@@ -20,6 +20,7 @@ def make_fragment_file(
     bam_file: Path,
     output_file: Path,
     is_paired: bool = True,
+    stranded: bool = False,
     barcode_tag: str | None = None,
     barcode_regex: str | None = None,
     umi_tag: str | None = None,
@@ -148,8 +149,8 @@ def make_fragment_file(
         _, compression = snapatac2._utils.get_file_format(output_file)
 
     return internal.make_fragment_file(
-        bam_file, output_file, is_paired, shift_left, shift_right, chunk_size,
-        barcode_tag, barcode_regex, umi_tag, umi_regex, min_mapq, chrM, source,
+        bam_file, output_file, is_paired, stranded, shift_left, shift_right, chunk_size,
+        barcode_tag, barcode_regex, umi_tag, umi_regex, min_mapq,
         compression, compression_level, tempdir,
     )
 
