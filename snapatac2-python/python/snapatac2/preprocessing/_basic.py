@@ -4,6 +4,7 @@ from typing import Literal
 from pathlib import Path
 import numpy as np
 from anndata import AnnData
+import scipy.sparse
 import logging
 
 import snapatac2
@@ -1084,3 +1085,43 @@ def select_features(
         adata.var["selected"] = result
     else:
         return result
+
+
+def fragments_to_insertions(adata: internal.AnnData, copy: bool = False) -> internal.AnnData:
+    """Convert paired-end fragments to insertion points. 
+
+    This function takes an AnnData object containing paired-end fragment 
+    information and derives insertion points, storing them in a new 
+    obsm key 'insertion'. 
+
+    Parameters
+    ----------
+        adata: The AnnData object containing the fragment data. 
+              Requires `adata.obsm['fragment_paired']` to be present.
+        copy: If True, return a copy of the AnnData object with the 
+              modifications. If False, modify the object in place.
+
+    Returns
+    -------
+        AnnData: The modified AnnData object with the 'insertion' 
+                 matrix added to `adata.obsm` if copy=True.
+    """
+
+    if copy:
+        adata = adata.copy()
+    
+    x = adata.obsm["fragment_paired"]
+    insertion = scipy.sparse.csr_matrix(
+        (
+            np.ones(len(x.indices) * 2, dtype="uint16"),
+            np.stack([x.indices, x.indices + x.data], axis=-1).reshape((-1)),
+            x.indptr * 2,
+        ),
+        shape=x.shape,
+    )
+    insertion.sort_indices()
+    insertion.sum_duplicates()
+
+    adata.obsm["insertion"] = insertion
+    if copy:
+        return adata
