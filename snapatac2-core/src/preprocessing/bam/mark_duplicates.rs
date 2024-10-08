@@ -71,9 +71,17 @@ impl BarcodeLocation {
         match self {
             BarcodeLocation::InData(tag) => match rec.data()
                 .get(tag).ok_or(anyhow!("No data: {}", std::str::from_utf8(tag.as_ref())?))??
-                {
+                {   
                     Value::String(barcode) => Ok(barcode.to_string()),
-                    _ => bail!("Not a String"),
+                    Value::Float(barcode) => Ok(barcode.to_string()),
+                    Value::Int32(barcode) => Ok(barcode.to_string()),
+                    Value::Character(barcode) => Ok(barcode.to_string()),
+                    Value::UInt32(barcode) => Ok(barcode.to_string()),
+                    Value::Int16(barcode) => Ok(barcode.to_string()),
+                    Value::UInt16(barcode) => Ok(barcode.to_string()),
+                    Value::Int8(barcode) => Ok(barcode.to_string()),
+                    Value::UInt8(barcode) => Ok(barcode.to_string()),
+                    _ => bail!("Not a valid value"),
                 },
             BarcodeLocation::Regex(re) => {
                 let read_name = std::str::from_utf8(rec.name().context("No read name")?)?;

@@ -116,6 +116,7 @@ pub fn make_fragment_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(
     chunk_size: usize,
     source: Option<&str>,
     mitochondrion: Option<HashSet<String>>,
+    xf_filter: Option<bool>,
     compression: Option<Compression>,
     compression_level: Option<u32>,
     temp_dir: Option<P3>,
@@ -170,60 +171,57 @@ pub fn make_fragment_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(
         &barcode,
         umi.as_ref(),
         mapq,
+        xf_filter,
         &mut library_qc,
     );
     if stranded==false {
         let mut output = open_file_for_write(output_file, compression, compression_level)?;
         group_bam_by_barcode(
-            filtered_records,
-            &barcode,
-            umi.as_ref(),
-            is_paired,
-            temp_dir.path().to_path_buf(),
-            chunk_size,
-        )
-        .into_fragments(&header)
-        .progress_with(spinner)
-        .for_each(|mut rec| {
-            if rec.strand().is_none() {
-                let new_start = rec.start().saturating_add_signed(shift_left);
-                let new_end = rec.end().saturating_add_signed(shift_right);
-                if new_start < new_end {
-                    rec.set_start(new_start);
-                    rec.set_end(new_end);
-                    writeln!(output, "{}", rec).unwrap();
-                }
-            } else {
-                writeln!(output, "{}", rec).unwrap();
-            }
-        });
+        filtered_records,
+        is_paired,
+        temp_dir,
+        chunk_size,
+    )
+    .into_fragments(&header)
+    .progress_with(spinner)
+    .for_each(|barcode| barcode.into_iter().for_each(|mut rec| {
+        if rec.strand().is_none() { // perform fragment length correction for paired-end reads
+            rec.set_start(rec.start().saturating_add_signed(shift_left));
+            rec.set_end(rec.end().saturating_add_signed(shift_right));
+        }
+        if rec.len() > 0 {
+            fragment_qc.update(&rec);
+            writeln!(output, "{}", rec).unwrap();
+        }
+    }));
     } else {
         //plus strand
         //append _plus to output file name
         let output_file_plus = output_file.as_ref().to_str().unwrap().to_string().replace(".gz", ".plus.gz");
-        println!("{:?}", output_file_plus);
         let output_file_minus = output_file.as_ref().to_str().unwrap().to_string().replace(".gz", ".minus.gz");
         let mut output_plus = open_file_for_write(output_file_plus, compression, compression_level)?;
         //minus strand
         let mut output_minus = open_file_for_write(output_file_minus, compression, compression_level)?;
         group_bam_by_barcode(
-            filtered_records,
-            &barcode,
-            umi.as_ref(),
-            is_paired,
-            temp_dir.path().to_path_buf(),
-            chunk_size,
-        )
+        filtered_records,
+        is_paired,
+        temp_dir,
+        chunk_size,
+        )   
         .into_fragments(&header)
         .progress_with(spinner)
-        .for_each(|mut rec| {
+        .for_each(|barcode| barcode.into_iter().for_each(|mut rec| {
+        if rec.len() > 0 {
+            fragment_qc.update(&rec);
             if rec.strand() == Some(Strand::Forward) {
                 writeln!(output_plus, "{}", rec).unwrap();
             } else if rec.strand() == Some(Strand::Reverse)  {
                 writeln!(output_minus, "{}", rec).unwrap();
-            }    
-        });
+            }  
+        }
+    }));
+        
     }
 
-    Ok(flagstat)
+    Ok((library_qc, fragment_qc))
 }

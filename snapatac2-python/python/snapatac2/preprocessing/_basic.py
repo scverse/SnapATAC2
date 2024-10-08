@@ -30,6 +30,7 @@ def make_fragment_file(
     min_mapq: int | None = 30,
     chunk_size: int = 50000000,
     chrM: list[str] | None = ["chrM", "M"],
+    xf_filter: bool = False,
     source: Literal["10x"] | None = None,
     compression: Literal["gzip", "zstandard"] | None = None,
     compression_level: int | None = None,
@@ -102,6 +103,8 @@ def make_fragment_file(
         Currently the only supported source is "10x".
     chrM
         A list of mitochondrial chromosome names, used to calculate QC metrics.
+    xf_filter
+        Whether to filter for reads with the xf:i:25 tag (as proposed in CellRanger).
     compression
         Compression type. If `None`, it is inferred from the suffix.
     compression_level
@@ -150,7 +153,7 @@ def make_fragment_file(
 
     return internal.make_fragment_file(
         bam_file, output_file, is_paired, stranded, shift_left, shift_right, chunk_size,
-        barcode_tag, barcode_regex, umi_tag, umi_regex, min_mapq,
+        barcode_tag, barcode_regex, umi_tag, umi_regex, min_mapq, chrM, xf_filter, source,
         compression, compression_level, tempdir,
     )
 

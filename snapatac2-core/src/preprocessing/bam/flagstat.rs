@@ -1,8 +1,10 @@
 use noodles::{bam::Record, sam::alignment::record::{Cigar, Flags, cigar::op::Kind}};
 use std::collections::{HashMap, HashSet};
-use anyhow::{Result, Context};
+use anyhow::{Result, Context, bail};
+use anyhow::anyhow;
 use itertools::Itertools;
 use serde::{Serialize, Deserialize};
+use noodles::{bam, sam::alignment::record::data::field::Tag};
 
 use super::BarcodeLocation;
 
@@ -283,6 +285,7 @@ pub fn filter_bam<'a, I>(
     barcode_loc: &'a BarcodeLocation,
     umi_loc: Option<&'a BarcodeLocation>,
     mapq_filter: Option<u8>,
+    xf_filter: Option<bool>,
     qc: &'a mut BamQC,
 ) -> impl Iterator<Item = AlignmentInfo> + 'a
 where
@@ -298,6 +301,18 @@ where
     reads.filter_map(move |r| {
         let barcode = barcode_loc.extract(&r).ok();
         let umi = umi_loc.and_then(|x| x.extract(&r).ok());
+        let xf_tag = Tag::new(b'x', b'f');
+        let xf_loc = &BarcodeLocation::InData(xf_tag);
+        let xf_flag = xf_loc.extract(&r).ok();
+        let is_xf = xf_filter.map_or(true, |x| 
+            {
+                if let Some(flag) = xf_flag {
+                    flag == "25"
+                } else {
+                    false
+                }
+            
+        });
         let is_hq = mapq_filter.map_or(true, |min_q| {
             let q = r.mapping_quality().map_or(255, |x| x.get());
             q >= min_q
@@ -308,7 +323,7 @@ where
         let is_properly_aligned = !flag.is_supplementary() &&
             (!is_paired || flag.is_properly_segmented());
         let flag_pass = !flag.intersects(flag_failed);
-        if is_properly_aligned && flag_pass && is_hq && barcode.is_some() {
+        if is_properly_aligned && flag_pass && is_hq && barcode.is_some() && is_xf {
             let alignment = AlignmentInfo::new(&r, barcode, umi).unwrap();
             Some(alignment)
         } else {

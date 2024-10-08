@@ -1,5 +1,8 @@
 use crate::utils::*;
 
+use itertools::Itertools;
+use nalgebra::coordinates::X;
+use pyo3::{prelude::*, pybacked::PyBackedStr};
 use anndata::Backend;
 use anndata_hdf5::H5;
 use anyhow::Result;
@@ -46,6 +49,7 @@ pub(crate) fn make_fragment_file(
     umi_regex: Option<&str>,
     mapq: Option<u8>,
     mitochondrial_dna: Option<Vec<String>>,
+    xf_filter: Option<bool>,
     source: Option<&str>,
     compression: Option<&str>,
     compression_level: Option<u32>,
@@ -63,8 +67,8 @@ pub(crate) fn make_fragment_file(
         bam_file, output_file, is_paired, stranded,
         barcode_tag.map(|x| parse_tag(x)), barcode_regex,
         umi_tag.map(|x| parse_tag(x)), umi_regex,
-        shift_left, shift_right, mapq, chunk_size,
-        compression.map(|x| utils::Compression::from_str(x).unwrap()), compression_level, temp_dir
+        shift_left, shift_right, mapq, chunk_size, source, mitochondrial_dna.map(|x| x.into_iter().collect()), xf_filter,
+        compression.map(|x| utils::Compression::from_str(x).unwrap()), compression_level, temp_dir,
     )?;
     Ok(bam_qc
         .report()
