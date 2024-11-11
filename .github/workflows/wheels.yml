@@ -2,8 +2,8 @@
 # It will build a Python project using CIBW, then upload the wheel and source
 # distribution to PyPI.
 name: build-wheels
+
 on:
-  workflow_call
   workflow_dispatch
 
 jobs:
