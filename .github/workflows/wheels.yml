@@ -4,6 +4,7 @@
 name: build-wheels
 on:
   workflow_call
+  workflow_dispatch:
 
 jobs:
   build_wheels:

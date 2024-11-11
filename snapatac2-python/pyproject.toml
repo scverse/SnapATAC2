@@ -8,14 +8,16 @@ python-source = "python"
 module-name = "snapatac2._snapatac2"
 
 [project]
-name = "snapatac2"
+name = "snapatac2-scooby"
 authors = [
-    {name = "Kai Zhang", email = "zhangkai33@westlake.edu.cn"}
+    {name = "Kai Zhang", email = "zhangkai33@westlake.edu.cn"},
+    {name = "Laura Martens", email = "laura.d.martens@icloud.com"},
+    {name = "Trevor Manz", email = "trevor.j.manz@gmail.com"},
 ]
 maintainers = [
-    {name = "Kai Zhang", email = "zhangkai33@westlake.edu.cn"}
+    {name = "Laura Martens", email = "laura.d.martens@icloud.com"},
 ]
-description = "SnapATAC2: Single-cell epigenomics analysis pipeline"
+description = "SnapATAC2-scooby: Single-cell epigenomics analysis pipeline with functionality for RNA-seq processing"
 readme = "README.md"
 license = {file = "LICENSE"}
 classifiers = [
@@ -49,11 +51,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://kzhang.org/SnapATAC2/index.html"
-Documentation = "https://kzhang.org/SnapATAC2/index.html"
-Repository = "https://kzhang.org/SnapATAC2/"
+Homepage = "https://scooby.readthedocs.io/en/latest/"
+Documentation = "https://scooby.readthedocs.io/en/latest/"
+Repository = "https://scooby.readthedocs.io/en/latest/"
 Issues = "https://github.com/kaizhang/SnapATAC2/issues"
-Changelog = "https://kzhang.org/SnapATAC2/version/dev/changelog.html"
 
 [project.optional-dependencies]
 recommend = [
