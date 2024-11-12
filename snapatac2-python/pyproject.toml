@@ -8,7 +8,7 @@ python-source = "python"
 module-name = "snapatac2._snapatac2"
 
 [project]
-name = "snapatac2-scooby"
+name = "snapatac2"
 authors = [
     {name = "Kai Zhang", email = "zhangkai33@westlake.edu.cn"},
     {name = "Laura Martens", email = "laura.d.martens@icloud.com"},
