@@ -1,4 +1,4 @@
-import snapatac2 as snap
+import snapatac2_scooby as snap
 
 import numpy as np
 import anndata as ad

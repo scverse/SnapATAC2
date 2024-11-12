@@ -5,10 +5,10 @@ build-backend = "maturin"
 [tool.maturin]
 features = ["pyo3/extension-module"]
 python-source = "python"
-module-name = "snapatac2._snapatac2"
+module-name = "snapatac2_scooby._snapatac2"
 
 [project]
-name = "snapatac2"
+name = "snapatac2_scooby"
 authors = [
     {name = "Kai Zhang", email = "zhangkai33@westlake.edu.cn"},
     {name = "Laura Martens", email = "laura.d.martens@icloud.com"},

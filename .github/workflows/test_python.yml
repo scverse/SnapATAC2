@@ -35,7 +35,7 @@ jobs:
   build-wheel:
     needs: build-and-test
     if: ${{ startsWith(github.ref, 'refs/tags/') || contains(github.event.head_commit.message, '[wheel]') }}
-    uses: kaizhang/SnapATAC2/.github/workflows/wheels.yml@main
+    uses: lauradmartens/SnapATAC2/.github/workflows/wheels.yml@main
 
   publish:
     needs: build-wheel

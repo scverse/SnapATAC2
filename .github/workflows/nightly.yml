@@ -36,7 +36,7 @@ jobs:
   build-wheel:
     needs: check-for-new-commits
     if : ${{ needs.check-for-new-commits.outputs.NEW_COMMITS == 'true' }}
-    uses: kaizhang/SnapATAC2/.github/workflows/wheels.yml@main
+    uses: lauradmartens/SnapATAC2/.github/workflows/wheels.yml@main
 
   publish:
     needs: build-wheel

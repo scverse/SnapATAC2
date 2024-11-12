@@ -1,4 +1,4 @@
-import snapatac2._snapatac2 as internal
+import snapatac2_scooby._snapatac2 as internal
 
 import numpy as np
 import pytest

@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
-import snapatac2._snapatac2 as sa
-from snapatac2.tools._misc import _groupby
+import snapatac2_scooby._snapatac2 as sa
+from snapatac2_scooby.tools._misc import _groupby
 import random
 from scipy import sparse
 import pytest
