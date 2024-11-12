@@ -40,6 +40,7 @@ pub(crate) fn make_fragment_file(
     output_file: PathBuf,
     is_paired: bool,
     stranded: bool,
+    xf_filter: bool,
     shift_left: i64,
     shift_right: i64,
     chunk_size: usize,
@@ -49,7 +50,6 @@ pub(crate) fn make_fragment_file(
     umi_regex: Option<&str>,
     mapq: Option<u8>,
     mitochondrial_dna: Option<Vec<String>>,
-    xf_filter: Option<bool>,
     source: Option<&str>,
     compression: Option<&str>,
     compression_level: Option<u32>,
@@ -63,11 +63,11 @@ pub(crate) fn make_fragment_file(
             panic!("TAG name must contain exactly two characters");
         }
     }
-    let stat = preprocessing::make_fragment_file(
-        bam_file, output_file, is_paired, stranded,
+    let (bam_qc, frag_qc) = preprocessing::make_fragment_file(
+        bam_file, output_file, is_paired, stranded, xf_filter,
         barcode_tag.map(|x| parse_tag(x)), barcode_regex,
         umi_tag.map(|x| parse_tag(x)), umi_regex,
-        shift_left, shift_right, mapq, chunk_size, source, mitochondrial_dna.map(|x| x.into_iter().collect()), xf_filter,
+        shift_left, shift_right, mapq, chunk_size, source, mitochondrial_dna.map(|x| x.into_iter().collect()),
         compression.map(|x| utils::Compression::from_str(x).unwrap()), compression_level, temp_dir,
     )?;
     Ok(bam_qc

@@ -284,8 +284,8 @@ pub fn filter_bam<'a, I>(
     is_paired: bool,
     barcode_loc: &'a BarcodeLocation,
     umi_loc: Option<&'a BarcodeLocation>,
+    xf_filter: bool,
     mapq_filter: Option<u8>,
-    xf_filter: Option<bool>,
     qc: &'a mut BamQC,
 ) -> impl Iterator<Item = AlignmentInfo> + 'a
 where
@@ -304,15 +304,11 @@ where
         let xf_tag = Tag::new(b'x', b'f');
         let xf_loc = &BarcodeLocation::InData(xf_tag);
         let xf_flag = xf_loc.extract(&r).ok();
-        let is_xf = xf_filter.map_or(true, |x| 
-            {
-                if let Some(flag) = xf_flag {
-                    flag == "25"
-                } else {
-                    false
-                }
-            
-        });
+        let is_xf = if xf_filter {
+            xf_flag.map_or(false, |flag| flag == "25")
+        } else {
+            true
+        };
         let is_hq = mapq_filter.map_or(true, |min_q| {
             let q = r.mapping_quality().map_or(255, |x| x.get());
             q >= min_q

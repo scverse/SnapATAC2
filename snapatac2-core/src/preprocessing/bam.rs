@@ -106,6 +106,7 @@ pub fn make_fragment_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(
     output_file: P2,
     is_paired: bool,
     stranded: bool,
+    xf_filter: bool,
     barcode_tag: Option<[u8; 2]>,
     barcode_regex: Option<&str>,
     umi_tag: Option<[u8; 2]>,
@@ -116,7 +117,6 @@ pub fn make_fragment_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(
     chunk_size: usize,
     source: Option<&str>,
     mitochondrion: Option<HashSet<String>>,
-    xf_filter: Option<bool>,
     compression: Option<Compression>,
     compression_level: Option<u32>,
     temp_dir: Option<P3>,
@@ -170,8 +170,8 @@ pub fn make_fragment_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(
         is_paired,
         &barcode,
         umi.as_ref(),
-        mapq,
         xf_filter,
+        mapq,
         &mut library_qc,
     );
     if stranded==false {
