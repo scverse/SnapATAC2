@@ -35,7 +35,7 @@ jobs:
   build-wheel:
     needs: build-and-test
     if: ${{ startsWith(github.ref, 'refs/tags/') || contains(github.event.head_commit.message, '[wheel]') }}
-    uses: lauradmartens/SnapATAC2/.github/workflows/wheels.yml@main
+    uses: lauradmartens/SnapATAC2/.github/workflows/wheels.yml@wheel
 
   publish:
     needs: build-wheel
@@ -48,7 +48,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         path: dist
-        pattern: snapatac2-*
+        pattern: snapatac2_scooby-*
         merge-multiple: true
 
     - name: Publish to PyPI

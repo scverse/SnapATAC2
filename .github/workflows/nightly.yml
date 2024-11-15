@@ -38,31 +38,31 @@ jobs:
     if : ${{ needs.check-for-new-commits.outputs.NEW_COMMITS == 'true' }}
     uses: lauradmartens/SnapATAC2/.github/workflows/wheels.yml@main
 
-  publish:
-    needs: build-wheel
-    runs-on: ubuntu-latest
-    steps:
-    - name: Download wheel files
-      uses: actions/download-artifact@v4
-      with:
-        path: dist
-        pattern: snapatac2-*
-        merge-multiple: true
+  # publish:
+  #   needs: build-wheel
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Download wheel files
+  #     uses: actions/download-artifact@v4
+  #     with:
+  #       path: dist
+  #       pattern: snapatac2-*
+  #       merge-multiple: true
 
-    - name: Delete Release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        if gh release view nightly > /dev/null 2>&1; then
-          gh release delete nightly -y --cleanup-tag
-        fi
+  #   - name: Delete Release
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     run: |
+  #       if gh release view nightly > /dev/null 2>&1; then
+  #         gh release delete nightly -y --cleanup-tag
+  #       fi
 
-    - name: Create nightly release
-      uses: ncipollo/release-action@v1
-      with:
-        allowUpdates: true
-        tag: nightly
-        name: Nightly Release
-        prerelease: true
-        removeArtifacts: true
-        artifacts: "dist/*.whl,dist/*.tar.gz"
+  #   - name: Create nightly release
+  #     uses: ncipollo/release-action@v1
+  #     with:
+  #       allowUpdates: true
+  #       tag: nightly
+  #       name: Nightly Release
+  #       prerelease: true
+  #       removeArtifacts: true
+  #       artifacts: "dist/*.whl,dist/*.tar.gz"

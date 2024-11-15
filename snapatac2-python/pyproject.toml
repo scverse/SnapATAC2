@@ -54,7 +54,7 @@ dependencies = [
 Homepage = "https://scooby.readthedocs.io/en/latest/"
 Documentation = "https://scooby.readthedocs.io/en/latest/"
 Repository = "https://scooby.readthedocs.io/en/latest/"
-Issues = "https://github.com/kaizhang/SnapATAC2/issues"
+Issues = "https://github.com/lauradmartens/SnapATAC2/issues"
 
 [project.optional-dependencies]
 recommend = [
