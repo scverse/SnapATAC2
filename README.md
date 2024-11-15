@@ -1,4 +1,4 @@
-SnapATAC2-scooby: This an adapted version of SnapATAC2 to process data to be used to train a scooby moodel!
+SnapATAC2-scooby: Single-cell epigenomics analysis pipeline with functionality for RNA-seq processing
 =====================================================================
 
 ![PyPI](https://img.shields.io/pypi/v/snapatac2-scooby)
@@ -6,7 +6,9 @@ SnapATAC2-scooby: This an adapted version of SnapATAC2 to process data to be use
 ![Continuous integration](https://github.com/lauradmartens/SnapATAC2/workflows/test-python-package/badge.svg)
 ![GitHub Repo stars](https://img.shields.io/github/stars/lauradmartens/SnapATAC2?style=social)
 
-SnapATAC2-scooby is based on [SnapATAC2 v2.7.1](https://github.com/kaizhang/SnapATAC2)! 
+> [!IMPORTANT]  
+> This an adapted version of SnapATAC2 to process data to be used to train a scooby model!
+> SnapATAC2-scooby is based on [SnapATAC2 v2.7.1](https://github.com/kaizhang/SnapATAC2)! 
 
 Resources
 -----------
@@ -14,7 +16,7 @@ Resources
 To learn how to use SnapATAC2-scooby to preprocess data to train a scooby model check our:
 - **Tutorials**: https://scooby.readthedocs.io/en/latest/
 
-For general SnapATAC2: 
+For general information on SnapATAC2 see: 
 - **Full Documentation**: https://kzhang.org/SnapATAC2/
 - **Installation instructions**: https://kzhang.org/SnapATAC2/install.html
 - **Tutorial/Demo**: https://kzhang.org/SnapATAC2/tutorials/index.html
