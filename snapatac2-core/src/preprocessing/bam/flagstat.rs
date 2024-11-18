@@ -304,11 +304,7 @@ where
         let xf_tag = Tag::new(b'x', b'f');
         let xf_loc = &BarcodeLocation::InData(xf_tag);
         let xf_flag = xf_loc.extract(&r).ok();
-        let is_xf = if xf_filter {
-            xf_flag.map_or(false, |flag| flag == "25")
-        } else {
-            true
-        };
+        let is_xf = !xf_filter || (xf_flag.as_ref().map_or(false, |flag| flag == "25"));    
         let is_hq = mapq_filter.map_or(true, |min_q| {
             let q = r.mapping_quality().map_or(255, |x| x.get());
             q >= min_q
