@@ -1,6 +1,6 @@
 [package]
 name = "snapatac2_scooby"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["Kai Zhang <kai@kzhang.org>", "Laura Martens <laura.d.martens@icloud.com>", "Trevor Manz <trevor.j.manz@gmail.com>"]
 description = "Rust APIs"
