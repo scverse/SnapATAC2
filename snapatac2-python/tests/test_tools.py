@@ -160,3 +160,98 @@ def test_tile_matrix(datadir):
     counts = [total_count(data, i) for i in [500, 1000, 5000, 10000]]
     for i in range(1, len(counts)):
         assert counts[i] == counts[i - 1], f"Bin size {i} failed"
+
+def test_rna_xf_filter_fragments(datadir, tmp_path):
+    bam = str(datadir.join('test_stranded.bam'))
+    bed = str(datadir.join('test_unstranded.bed.gz'))
+    output = str(tmp_path) + "/out.bed.gz"
+
+    snap.pp.make_fragment_file(
+    bam_file=bam,
+    output_file=str(tmp_path) + "/out.bed.gz",
+    barcode_tag="CB",
+    umi_tag="UB",
+    umi_regex=None,
+    stranded=False,
+    is_paired=False,
+    shift_left=0,
+    shift_right=0,
+    xf_filter=True
+)
+    with gzip.open(bed, 'rt') as fl:
+        expected = sorted(fl.readlines())
+
+    with gzip.open(output, 'rt') as fl:
+        actual = sorted(fl.readlines())
+    
+    assert expected == actual
+
+def test_stranded_fragment_file(datadir, tmp_path):
+    bam = str(datadir.join('test_stranded.bam'))
+    bed_plus = str(datadir.join('test_stranded.bed.plus.gz'))
+    bed_minus = str(datadir.join('test_stranded.bed.minus.gz'))
+    output_plus = str(tmp_path) + "/out.bed.plus.gz"
+    output_minus = str(tmp_path) + "/out.bed.minus.gz"
+
+    snap.pp.make_fragment_file(
+    bam_file=bam,
+    output_file=str(tmp_path) + "/out.bed.gz",
+    barcode_tag="CB",
+    umi_tag="UB",
+    umi_regex=None,
+    stranded=True,
+    is_paired=False,
+    shift_left=0,
+    shift_right=0,
+    xf_filter=True
+)
+
+    with gzip.open(bed_plus, 'rt') as fl:
+        expected = sorted(fl.readlines())
+
+    with gzip.open(output_plus, 'rt') as fl:
+        actual = sorted(fl.readlines())
+    
+    assert expected == actual
+
+    with gzip.open(bed_minus, 'rt') as fl:
+        expected = sorted(fl.readlines())
+
+    with gzip.open(output_minus, 'rt') as fl:
+        actual = sorted(fl.readlines())
+
+    assert expected == actual
+
+def test_export_coverage(datadir, tmp_path):
+    ad_minus = ad.read_h5ad(str(datadir.join('test_minus.h5ad')))
+    ad_plus = ad.read_h5ad(str(datadir.join('test_plus.h5ad')))
+
+    import pybigtools
+    bw_plus = pybigtools.open(str(datadir.join('test_plus.bw')))
+    bw_minus = pybigtools.open(str(datadir.join('test_minus.bw')))
+
+    snap.ex.export_coverage(
+    ad_minus,
+    groupby='group',
+    bin_size=1,
+    normalization=None,
+    n_jobs=-1,
+    max_frag_length=None,
+    suffix='.bw',
+    prefix=f"{str(tmp_path)}/minus."
+)
+    
+    snap.ex.export_coverage(
+    ad_plus,
+    groupby='group',
+    bin_size=1,
+    normalization=None,
+    n_jobs=-1,
+    max_frag_length=None,
+    suffix='.bw',
+    prefix=f"{str(tmp_path)}/plus."
+)   
+    
+
+    assert list(bw_plus.intervals("chr1")) == list(pybigtools.open(f"{str(tmp_path)}/plus.test.bw").intervals("chr1"))
+    assert list(bw_minus.intervals("chr1")) == list(pybigtools.open(f"{str(tmp_path)}/minus.test.bw").intervals("chr1"))
