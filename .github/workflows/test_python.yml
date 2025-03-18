@@ -21,7 +21,7 @@ jobs:
     - name: Install dependencies
       run: |
         pip install --user --upgrade pip
-        pip install --user pytest hypothesis==6.72.4 wheel
+        pip install --user pytest hypothesis==6.72.4 wheel 
 
     - name: Build Python package
       run: |

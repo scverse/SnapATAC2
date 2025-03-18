@@ -1,8 +1,5 @@
 use crate::utils::*;
 
-use itertools::Itertools;
-use nalgebra::coordinates::X;
-use pyo3::{prelude::*, pybacked::PyBackedStr};
 use anndata::Backend;
 use anndata_hdf5::H5;
 use anyhow::Result;
@@ -31,7 +28,7 @@ use snapatac2_core::{
 
 #[pyfunction]
 #[pyo3(signature = (
-    bam_file, output_file, is_paired, shift_left, shift_right, chunk_size,
+    bam_file, output_file, is_paired, stranded, xf_filter, shift_left, shift_right, chunk_size,
     barcode_tag=None, barcode_regex=None, umi_tag=None, umi_regex=None, mapq=None,
     mitochondrial_dna=None, source=None, compression=None, compression_level=None, temp_dir=None
 ))]

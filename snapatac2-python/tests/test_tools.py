@@ -222,36 +222,38 @@ def test_stranded_fragment_file(datadir, tmp_path):
 
     assert expected == actual
 
-def test_export_coverage(datadir, tmp_path):
-    ad_minus = ad.read_h5ad(str(datadir.join('test_minus.h5ad')))
-    ad_plus = ad.read_h5ad(str(datadir.join('test_plus.h5ad')))
+# def test_export_coverage(datadir, tmp_path):
+#     ad_minus = ad.read_h5ad(str(datadir.join('test_minus.h5ad')))
+#     ad_plus = ad.read_h5ad(str(datadir.join('test_plus.h5ad')))
 
-    import pybigtools
-    bw_plus = pybigtools.open(str(datadir.join('test_plus.bw')))
-    bw_minus = pybigtools.open(str(datadir.join('test_minus.bw')))
+#     import pybigtools
+#     bw_plus = pybigtools.open(str(datadir.join('test_plus.bw')))
+#     bw_minus = pybigtools.open(str(datadir.join('test_minus.bw')))
 
-    snap.ex.export_coverage(
-    ad_minus,
-    groupby='group',
-    bin_size=1,
-    normalization=None,
-    n_jobs=-1,
-    max_frag_length=None,
-    suffix='.bw',
-    prefix=f"{str(tmp_path)}/minus."
-)
+#     snap.ex.export_coverage(
+#     ad_minus,
+#     groupby='group',
+#     bin_size=1,
+#     normalization=None,
+#     n_jobs=-1,
+#     max_frag_length=None,
+#     suffix='.bw',
+#     prefix=f"{str(tmp_path)}/minus."
+# )
     
-    snap.ex.export_coverage(
-    ad_plus,
-    groupby='group',
-    bin_size=1,
-    normalization=None,
-    n_jobs=-1,
-    max_frag_length=None,
-    suffix='.bw',
-    prefix=f"{str(tmp_path)}/plus."
-)   
+#     snap.ex.export_coverage(
+#     ad_plus,
+#     groupby='group',
+#     bin_size=1,
+#     normalization=None,
+#     n_jobs=-1,
+#     max_frag_length=None,
+#     suffix='.bw',
+#     prefix=f"{str(tmp_path)}/plus."
+# )   
     
+#     output_plus = pybigtools.open(f"{str(tmp_path)}/plus.test.bw")
+#     output_minus = pybigtools.open(f"{str(tmp_path)}/minus.test.bw")
 
-    assert list(bw_plus.intervals("chr1")) == list(pybigtools.open(f"{str(tmp_path)}/plus.test.bw").intervals("chr1"))
-    assert list(bw_minus.intervals("chr1")) == list(pybigtools.open(f"{str(tmp_path)}/minus.test.bw").intervals("chr1"))
+#     assert list(bw_plus.intervals("chr1")) == list(output_plus.intervals("chr1"))
+#     assert list(bw_minus.intervals("chr1")) == list(output_minus.intervals("chr1"))

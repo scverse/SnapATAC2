@@ -223,6 +223,7 @@ pub struct AlignmentInfo {
     pub sum_of_qual_scores: u32,
     pub barcode: Option<String>,
     pub umi: Option<String>,
+    pub skips: Option<Vec<(u64, u64)>>,
 }
 
 impl AlignmentInfo {
@@ -251,6 +252,43 @@ impl AlignmentInfo {
         } else {
             0
         });
+
+        let skips = if cigar
+            .iter()
+            .map(Result::unwrap)
+            .any(|x| x.kind() == Kind::Skip)
+        {
+            let parts: Result<Vec<_>> = cigar
+                .iter()
+                .map(Result::unwrap)
+                .filter(|op| op.kind() == Kind::Skip || op.kind() == Kind::Match)
+                .group_by(|op| op.kind())
+                .into_iter()
+                .chunks(2)
+                .into_iter()
+                .map(|mut chunk| {
+                    let (mkind, m) = chunk.next().context("No match")?;
+                    if mkind != Kind::Match {
+                        return Err(anyhow!("First chunk is not a match"));
+                    }
+                    let skip_len = match chunk.next() {
+                        Some((kind, ops)) => {
+                            if kind != Kind::Skip {
+                                return Err(anyhow!("First chunk is not a skip"));
+                            }
+                            ops.map(|x| x.len() as u64).sum()
+                        }
+                        None => 0,
+                    };
+                    let match_len = m.map(|x| x.len() as u64).sum();
+                    Ok((match_len, skip_len))
+                })
+                .collect();
+            Some(parts?)
+        } else {
+            None
+        };
+
         Ok(Self {
             name: std::str::from_utf8(rec.name().context("no read name")?)?.to_string(),
             reference_sequence_id: rec.reference_sequence_id().context("no reference sequence id")??.try_into()?,
@@ -262,6 +300,7 @@ impl AlignmentInfo {
             sum_of_qual_scores: sum_of_qual_score(rec),
             barcode,
             umi,
+            skips,
         })
     }
 

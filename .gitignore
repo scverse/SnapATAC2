@@ -9,7 +9,7 @@ build
 !snapatac2-python/tests/test_tools/*.bam
 !snapatac2-python/tests/test_tools/*.bw
 !snapatac2-python/tests/test_tools/*.gz
-!snapatac2-python/tests/test_tools/*.h5ad
+
 
 # Rust
 target
@@ -34,3 +34,4 @@ _autosummary
 *.bdg
 *.bam
 *.bai
+!snapatac2-python/tests/test_tools/*.h5ad

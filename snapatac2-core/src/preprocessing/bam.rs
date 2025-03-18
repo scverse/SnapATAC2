@@ -13,7 +13,6 @@ use anyhow::{Result, bail};
 use std::{collections::{HashMap, HashSet}, io::Write, path::Path};
 use log::warn;
 
-use std::{io::Write, path::Path};
 use tempfile::Builder;
 use bed_utils::bed::Strand;
 use crate::utils::{open_file_for_write, Compression};
