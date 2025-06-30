@@ -35,7 +35,7 @@ The nightly build is the build from the latest source codes, which includes the
 latest features, enhancements, and bug fixes that haven't been released. 
 The nightly build can be unstable and include some untested features.
 
-The [nightly release](https://github.com/kaizhang/SnapATAC2/releases/tag/nightly) page
+The [nightly release](https://github.com/scverse/SnapATAC2/releases/tag/nightly) page
 contains wheel files for the nightly build.
 Please download the corresponding wheel file for your platform and use `pip install` to install it.
 For example, if you are using a Linux system with Python 3.8, you can use the following command to install it:
@@ -60,7 +60,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 Once you have the Rust compiler properly installed, you can use pip to install the SnapATAC2 library:
 
 ```
-pip install 'git+https://github.com/kaizhang/SnapATAC2.git#egg=snapatac2&subdirectory=snapatac2-python'
+pip install 'git+https://github.com/scverse/SnapATAC2.git#egg=snapatac2&subdirectory=snapatac2-python'
 ```
 
 Optional dependencies
