@@ -988,7 +988,7 @@ def select_features(
     various functions to generate submatrices on the fly.
     Features that are zero in all cells will be always removed regardless of the
     filtering criteria.
-    For more discussion about feature selection, see: https://github.com/kaizhang/SnapATAC2/discussions/116.
+    For more discussion about feature selection, see: https://github.com/scverse/SnapATAC2/discussions/116.
 
     Parameters
     ----------
@@ -1021,7 +1021,7 @@ def select_features(
         If greater than 1, this function will perform iterative clustering and feature selection
         based on variable features found using previous clustering results.
         This is similar to the procedure implemented in ArchR, but we do not recommend it,
-        see https://github.com/kaizhang/SnapATAC2/issues/111.
+        see https://github.com/scverse/SnapATAC2/issues/111.
         Default value is 1, which means no iterative clustering is performed.
     inplace
         Perform computation inplace or return result.

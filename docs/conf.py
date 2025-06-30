@@ -28,7 +28,7 @@ print(f'Building documentation for SnapATAC2 {release} (short version: {version}
 # -- Project information -----------------------------------------------------
 
 project = 'SnapATAC2'
-copyright = '2022-2024, Kai Zhang'
+copyright = '2022-2025, Kai Zhang'
 author = 'Kai Zhang'
 
 # -- General configuration ---------------------------------------------------
@@ -128,7 +128,7 @@ html_theme_options = {
         "alt_text": "SnapATAC2",
     },
 
-    "github_url": "https://github.com/kaizhang/SnapATAC2",
+    "github_url": "https://github.com/scverse/SnapATAC2",
     "external_links": [
         {"name": "Learn", "url": "https://kzhang.org/epigenomics-analysis/"}
     ],
@@ -141,12 +141,12 @@ html_theme_options = {
 
     "switcher": {
         "version_match": switcher_version,
-        "json_url": "https://raw.githubusercontent.com/kaizhang/SnapATAC2/main/docs/_static/versions.json", 
+        "json_url": "https://raw.githubusercontent.com/scverse/SnapATAC2/refs/heads/main/docs/_static/versions.json",
     },
 }
 
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip().decode('ascii')
-code_url = f"https://github.com/kaizhang/SnapATAC2/blob/{commit}"
+code_url = f"https://github.com/scverse/SnapATAC2/blob/{commit}"
 
 # based on numpy doc/source/conf.py
 def linkcode_resolve(domain, info):

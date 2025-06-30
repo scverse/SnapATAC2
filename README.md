@@ -3,8 +3,8 @@ SnapATAC2: A Python/Rust package for single-cell epigenomics analysis
 
 ![PyPI](https://img.shields.io/pypi/v/snapatac2)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/snapatac2)
-![Continuous integration](https://github.com/kaizhang/SnapATAC2/workflows/test-python-package/badge.svg)
-![GitHub Repo stars](https://img.shields.io/github/stars/kaizhang/SnapATAC2?style=social)
+![Continuous integration](https://github.com/scverse/SnapATAC2/workflows/test-python-package/badge.svg)
+![GitHub Repo stars](https://img.shields.io/github/stars/scverse/SnapATAC2?style=social)
 
 > [!TIP]
 > Got raw fastq files? Check out our new single-cell preprocessing package [precellar](https://github.com/regulatory-genomics/precellar)!
@@ -19,13 +19,12 @@ SnapATAC2 is a flexible, versatile, and scalable single-cell omics analysis fram
 - Seamless integration with other single-cell analysis packages such as Scanpy.
 - Implementation of fully backed AnnData.
 
-Resources
----------
+Documentation
+-------------
 
-- **Full Documentation**: https://kzhang.org/SnapATAC2/
-- **Installation instructions**: https://kzhang.org/SnapATAC2/install.html
-- **Tutorial/Demo**: https://kzhang.org/SnapATAC2/tutorials/index.html
-- **Benchmarks**: https://github.com/kaizhang/single-cell-benchmark
+- **Full Documentation**: https://scverse.org/SnapATAC2/
+- **Installation instructions**: https://scverse.org/SnapATAC2/install.html
+- **Tutorial/Demo**: https://scverse.org/SnapATAC2/tutorials/index.html
 
 How to cite
 -----------

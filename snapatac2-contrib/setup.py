@@ -14,7 +14,7 @@ setup(
     description='SnapATAC2: Single-cell epigenomics analysis pipeline',
     long_description=README,
     long_description_content_type='text/markdown',
-    url='https://kzhang.org/SnapATAC2/', 
+    url='https://scverse.org/SnapATAC2/', 
     license='MIT',
     version=VERSION['__version__'],
     packages=[

@@ -49,11 +49,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://kzhang.org/SnapATAC2/index.html"
-Documentation = "https://kzhang.org/SnapATAC2/index.html"
-Repository = "https://kzhang.org/SnapATAC2/"
-Issues = "https://github.com/kaizhang/SnapATAC2/issues"
-Changelog = "https://kzhang.org/SnapATAC2/version/dev/changelog.html"
+Homepage = "https://scverse.org/SnapATAC2/index.html"
+Documentation = "https://scverse.org/SnapATAC2/index.html"
+Repository = "https://scverse.org/SnapATAC2/"
+Issues = "https://github.com/scverse/SnapATAC2/issues"
+Changelog = "https://scverse.org/SnapATAC2/version/dev/changelog.html"
 
 [project.optional-dependencies]
 recommend = [

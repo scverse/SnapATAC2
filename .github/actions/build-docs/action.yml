@@ -63,7 +63,7 @@ runs:
     shell: bash
     run: |
       #JSON=$(cat ${GITHUB_WORKSPACE}/docs/_static/versions.json)
-      JSON=$(curl -s "https://raw.githubusercontent.com/kaizhang/SnapATAC2/main/docs/_static/versions.json")
+      JSON=$(curl -s "https://raw.githubusercontent.com/scverse/SnapATAC2/main/docs/_static/versions.json")
       VERSION=$(echo "$JSON" | jq -r '.[] | select(.preferred == true) | .version')
       echo "PREFERRED_VERSION=$VERSION" >> $GITHUB_ENV
       echo "Preferred version is $VERSION"
