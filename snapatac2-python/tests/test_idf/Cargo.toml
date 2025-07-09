@@ -1,0 +1,13 @@
+[package]
+name = "idf_test"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+# Empty workspace table to keep this package independent
+
+[dependencies]
+nalgebra-sparse = "0.9"
+rayon = "1.7"
+rand = "0.8"
+itertools = "0.11"
