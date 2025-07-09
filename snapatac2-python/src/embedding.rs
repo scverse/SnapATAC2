@@ -18,7 +18,7 @@ use numpy::{array::PyArrayMethods, PyArray1, PyArray2, PyReadonlyArray1, PyReado
 use pyanndata::data::PyArrayData;
 use pyo3::prelude::*;
 use rand::SeedableRng;
-use rayon::prelude::{ParallelBridge, ParallelIterator};
+use rayon::{iter::IntoParallelRefIterator, prelude::{ParallelBridge, ParallelIterator}};
 use std::ops::Deref;
 
 #[pyfunction]
@@ -293,8 +293,8 @@ where
     let mut idf = vec![0.0; iter.peek().unwrap().ncols()];
     let mut n = 0.0;
     iter.for_each(|mat| {
-        mat.col_indices().iter().for_each(|i| idf[*i] += 1.0);
         n += mat.nrows() as f64;
+        mat.col_indices().iter().for_each(|i| idf[*i] += 1.0);
     });
     if idf.iter().all_equal() {
         vec![1.0; idf.len()]
