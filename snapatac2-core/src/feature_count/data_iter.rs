@@ -54,6 +54,7 @@ fn single_to_fragments(
                                 strand = Some(Strand::Forward);
                             } else {
                                 end = start + 1;
+                                start = start - (size.abs() as u64);
                                 strand = Some(Strand::Reverse);
                             }
                             Some(Fragment {
