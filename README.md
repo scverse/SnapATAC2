@@ -1,10 +1,10 @@
 SnapATAC2: A Python/Rust package for single-cell epigenomics analysis
 =====================================================================
 
-![PyPI](https://img.shields.io/pypi/v/snapatac2)
-![PyPI - Downloads](https://img.shields.io/pypi/dm/snapatac2)
-![Continuous integration](https://github.com/scverse/SnapATAC2/workflows/test-python-package/badge.svg)
-![GitHub Repo stars](https://img.shields.io/github/stars/scverse/SnapATAC2?style=social)
+[![PyPI](https://img.shields.io/pypi/v/snapatac2)](https://pypi.org/project/snapatac2/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/snapatac2)](https://pypistats.org/packages/snapatac2)
+[![Continuous integration](https://github.com/scverse/SnapATAC2/workflows/test-python-package/badge.svg)](https://github.com/scverse/SnapATAC2/actions/workflows/test_python.yml)
+[![GitHub Repo stars](https://img.shields.io/github/stars/scverse/SnapATAC2?style=social)](https://github.com/scverse/SnapATAC2/stargazers)
 
 > [!TIP]
 > Got raw fastq files? Check out our new single-cell preprocessing package [precellar](https://github.com/regulatory-genomics/precellar)!
