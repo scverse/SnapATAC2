@@ -2,7 +2,6 @@ import snapatac2 as snap
 
 import numpy as np
 import anndata as ad
-import pandas as pd
 from pathlib import Path
 from natsort import natsorted
 from collections import defaultdict
@@ -12,24 +11,30 @@ from hypothesis.extra.numpy import *
 from scipy.sparse import csr_matrix
 import gzip
 
-from distutils import dir_util
 from pytest import fixture
 import os
+import shutil
 
 @fixture
 def datadir(tmpdir, request):
-    '''
+    """
     Fixture responsible for searching a folder with the same name of test
     module and, if available, moving all contents to a temporary directory so
     tests can use them freely.
-    '''
+    """
     filename = request.module.__file__
     test_dir, _ = os.path.splitext(filename)
 
     if os.path.isdir(test_dir):
-        dir_util.copy_tree(test_dir, str(tmpdir))
-
+        for item in os.listdir(test_dir):
+            src = os.path.join(test_dir, item)
+            dst = os.path.join(tmpdir, item)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
     return tmpdir
+
 
 def h5ad(dir=Path("./")):
     import uuid
