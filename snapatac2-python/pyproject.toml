@@ -66,4 +66,4 @@ recommend = [
     "scikit-misc>=0.1.3",
     "magic-impute>=2.0",
 ]
-test = ["pytest", "hypothesis==6.72.4"]
+test = ["pytest", "hypothesis==6.72.4", "distutils"]
