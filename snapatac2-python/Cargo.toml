@@ -13,31 +13,29 @@ keywords = ["single-cell", "biology"]
 [dependencies]
 snapatac2-core = { workspace = true }
 #anndata = "0.6.1"
-anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "cccffb5c0b21eeebcf5924c19634054cf2653612"}
+anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "58518951f79fbef30b2314f0893453d4bff97fc8"}
 #anndata-hdf5 = "0.5"
-anndata-hdf5 = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "cccffb5c0b21eeebcf5924c19634054cf2653612"}
+anndata-hdf5 = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "58518951f79fbef30b2314f0893453d4bff97fc8"}
 #anndata-zarr = "0.1"
-anndata-zarr = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "cccffb5c0b21eeebcf5924c19634054cf2653612"}
+anndata-zarr = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "58518951f79fbef30b2314f0893453d4bff97fc8"}
 #pyanndata = "0.5.1"
-pyanndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "cccffb5c0b21eeebcf5924c19634054cf2653612"}
+pyanndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "58518951f79fbef30b2314f0893453d4bff97fc8"}
 anyhow = "1.0"
 bed-utils = "0.9.2"
 flate2 = "1.0"
 itertools = "0.14"
-indicatif = "0.17"
+indicatif = "0.18"
 linreg = "0.2"
 log = "0.4"
 noodles = { version = "0.100", features = ["bam", "sam"] }
 numpy = "0.25"
 num = "0.4"
-nalgebra-sparse = "0.10"
-nalgebra = "0.33"
+nalgebra-sparse = "0.11"
+nalgebra = "0.34"
 ndarray = "0.16"
 polars = { version = "0.49", features = ["ndarray", "dtype-categorical"] }
 pyo3-log = "0.12"
 pyo3-polars = "0.22"
-rand_isaac = "0.4"
-rand_core = "0.9"
 rand = "0.9"
 rayon = "1.11"
 statrs = "0.18"
