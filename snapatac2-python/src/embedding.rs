@@ -16,9 +16,9 @@ use nalgebra_sparse::CsrMatrix;
 use ndarray::{Array1, Array2, Axis};
 use numpy::{array::PyArrayMethods, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 use pyanndata::data::PyArrayData;
-use pyo3::prelude::*;
+use pyo3::{ffi::c_str, prelude::*};
 use rand::SeedableRng;
-use rayon::{iter::IntoParallelRefIterator, prelude::{ParallelBridge, ParallelIterator}};
+use rayon::prelude::{ParallelBridge, ParallelIterator};
 use std::ops::Deref;
 
 #[pyfunction]
@@ -53,8 +53,8 @@ pub(crate) fn spectral_embedding<'py>(
     let (evals, evecs) = crate::with_anndata!(&anndata, run)?;
 
     Ok((
-        PyArray1::from_owned_array_bound(py, evals),
-        PyArray2::from_owned_array_bound(py, evecs),
+        PyArray1::from_owned_array(py, evals),
+        PyArray2::from_owned_array(py, evecs),
     ))
 }
 
@@ -123,8 +123,8 @@ pub(crate) fn spectral_embedding_nystrom<'py>(
 
     let (evals, evecs) = crate::with_anndata!(&anndata, run)?;
     Ok((
-        PyArray1::from_owned_array_bound(py, evals),
-        PyArray2::from_owned_array_bound(py, evecs),
+        PyArray1::from_owned_array(py, evals),
+        PyArray2::from_owned_array(py, evecs),
     ))
 }
 
@@ -153,9 +153,10 @@ fn spectral_mf(
 
     // Compute eigenvalues and eigenvectors
     let (v, u) = Python::with_gil(|py| {
-        let fun: Py<PyAny> = PyModule::from_code_bound(
+        let fun: Py<PyAny> = PyModule::from_code(
             py,
-            "def eigen(X, D, k, seed):
+            c_str!(
+                "def eigen(X, D, k, seed):
                 from scipy.sparse.linalg import LinearOperator, eigsh
                 import numpy
                 numpy.random.seed(seed)
@@ -168,15 +169,16 @@ fn spectral_mf(
                 ix = evals.argsort()[::-1]
                 evals = evals[ix]
                 evecs = evecs[:, ix]
-                return (evals, evecs)",
-            "",
-            "",
+                return (evals, evecs)"
+            ),
+            c_str!(""),
+            c_str!(""),
         )?
         .getattr("eigen")?
         .into();
         let args = (
             PyArrayData::from(ArrayData::from(input)),
-            PyArray1::from_iter_bound(py, degree_inv.into_iter().copied()),
+            PyArray1::from_iter(py, degree_inv.into_iter().copied()),
             n_components,
             random_state,
         );
@@ -213,22 +215,22 @@ where
         .axis_iter_mut(Axis(1))
         .zip(evals.iter())
         .for_each(|(mut col, v)| col *= v.recip());
-    let evecs_py = PyArray2::from_array_bound(py, evecs);
-    let evals_py = PyArray1::from_array_bound(py, evals);
-    let seed_matrix_py = PyArrayData::from(ArrayData::from(seed_matrix)).into_py(py);
+    let evecs_py = PyArray2::from_array(py, evecs);
+    let evals_py = PyArray1::from_array(py, evals);
+    let seed_matrix_py = PyArrayData::from(ArrayData::from(seed_matrix)).into_pyobject(py)?;
 
-    let nystrom_py: Py<PyAny> = PyModule::from_code_bound(
+    let nystrom_py: Py<PyAny> = PyModule::from_code(
         py,
-        "def nystrom(seed, sample, evecs, evals):
+        c_str!("def nystrom(seed, sample, evecs, evals):
             import numpy as np
             q = sample @ (seed.T @ evecs)
             t = q.sum(axis=0) * evals
             d = q @ t.reshape((-1, 1))
             d[d<=0] = np.min(d[d>0])
             np.divide(q, np.sqrt(d), out=q)
-            return q",
-        "",
-        "",
+            return q"),
+        c_str!(""),
+        c_str!(""),
     )?
     .getattr("nystrom")?
     .into();
@@ -333,12 +335,15 @@ where
                 }
                 local
             })
-            .reduce(|| vec![0.0; ncols], |mut a, b| {
-                for (x, y) in a.iter_mut().zip(b) {
-                    *x += y;
-                }
-                a
-            });
+            .reduce(
+                || vec![0.0; ncols],
+                |mut a, b| {
+                    for (x, y) in a.iter_mut().zip(b) {
+                        *x += y;
+                    }
+                    a
+                },
+            );
         if let Some(ref mut idf_vec) = idf {
             for (x, y) in idf_vec.iter_mut().zip(local) {
                 *x += y;
@@ -498,20 +503,20 @@ pub(crate) fn multi_spectral_embedding<'py>(
     info!("Compute embedding...");
     let (evals, evecs, _) = spectral_mf(mat, n_components, random_state)?;
     Ok((
-        PyArray1::from_owned_array_bound(py, evals),
-        PyArray2::from_owned_array_bound(py, evecs),
+        PyArray1::from_owned_array(py, evals),
+        PyArray2::from_owned_array(py, evecs),
     ))
 }
 
 fn frobenius_norm(x: &CsrMatrix<f64>) -> f64 {
     let sum: f64 = Python::with_gil(|py| {
-        let fun: Py<PyAny> = PyModule::from_code_bound(
+        let fun: Py<PyAny> = PyModule::from_code(
             py,
-            "def f(X):
+            c_str!("def f(X):
                 import numpy as np
-                return np.power(X @ X.T, 2).sum()",
-            "",
-            "",
+                return np.power(X @ X.T, 2).sum()"),
+            c_str!(""),
+            c_str!(""),
         )?
         .getattr("f")?
         .into();

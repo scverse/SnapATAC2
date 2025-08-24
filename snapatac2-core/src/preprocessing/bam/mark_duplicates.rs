@@ -228,7 +228,7 @@ where
     I: Iterator<Item = AlignmentInfo>,
     F: FnMut(&AlignmentInfo) -> String,
 {
-    pub fn into_fragments<'a>(&'a self, header: &'a Header) -> impl Iterator<Item = Vec<Fragment>> + '_ {
+    pub fn into_fragments<'a>(&'a self, header: &'a Header) -> impl Iterator<Item = Vec<Fragment>> + 'a {
         self.groups.into_iter().map(|(_, rec)| get_unique_fragments(rec, header, self.is_paired))
     }
 }

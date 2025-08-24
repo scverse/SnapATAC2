@@ -380,7 +380,7 @@ pub(crate) fn mk_peak_matrix(
     out: Option<AnnDataLike>,
 ) -> Result<()> {
     let peaks = peaks
-        .iter()?
+        .try_iter()?
         .map(|x| GenomicRange::from_str(x.unwrap().extract().unwrap()).unwrap());
 
     macro_rules! run {
@@ -507,7 +507,7 @@ pub(crate) fn tss_enrichment<'py>(
     anndata: AnnDataLike,
     gtf_file: PathBuf,
     exclude_chroms: Option<Vec<String>>,
-) -> Result<HashMap<&'py str, PyObject>> {
+) -> Result<HashMap<&'py str, Bound<'py, PyAny>>> {
     let exclude_chroms = match exclude_chroms {
         Some(chrs) => chrs.into_iter().collect(),
         None => HashSet::new(),
@@ -525,10 +525,10 @@ pub(crate) fn tss_enrichment<'py>(
     let (scores, tsse) = crate::with_anndata!(&anndata, run)?;
     let library_tsse = tsse.result();
     let mut result = HashMap::new();
-    result.insert("tsse", scores.to_object(py));
-    result.insert("library_tsse", library_tsse.0.to_object(py));
-    result.insert("frac_overlap_TSS", library_tsse.1.to_object(py));
-    result.insert("TSS_profile", tsse.get_counts().to_object(py));
+    result.insert("tsse", scores.into_pyobject(py)?);
+    result.insert("library_tsse", library_tsse.0.into_pyobject(py)?.into_any());
+    result.insert("frac_overlap_TSS", library_tsse.1.into_pyobject(py)?.into_any());
+    result.insert("TSS_profile", tsse.get_counts().into_pyobject(py)?.into_any());
     Ok(result)
 }
 

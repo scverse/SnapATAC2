@@ -23,11 +23,13 @@ use bed_utils::bed::map::GIntervalIndexSet;
 use bed_utils::bed::GenomicRange;
 use indexmap::map::IndexMap;
 use indexmap::IndexSet;
-use noodles::{core::Position, gff, gff::record::Strand, gtf};
+use noodles::gff::feature::record::Strand;
+use noodles::{core::Position, gff, gtf};
 use polars::frame::DataFrame;
 use polars::prelude::{Column, Series};
+use std::io::BufReader;
 use std::ops::Range;
-use std::{collections::HashMap, fmt::Debug, io::BufRead, str::FromStr};
+use std::{fmt::Debug, io::BufRead};
 
 /// Position is 1-based.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,78 +63,6 @@ impl<'a> Default for TranscriptParserOptions {
     }
 }
 
-fn from_gtf(record: &gtf::Record, options: &TranscriptParserOptions) -> Result<Transcript> {
-    if record.ty() != "transcript" {
-        bail!("record is not a transcript");
-    }
-
-    let left = record.start();
-    let right = record.end();
-    let attributes: HashMap<&str, &str> = record
-        .attributes()
-        .iter()
-        .map(|x| (x.key(), x.value()))
-        .collect();
-    let get_attr = |key: &str| -> String {
-        attributes
-            .get(key)
-            .expect(&format!("failed to find '{}' in record: {}", key, record))
-            .to_string()
-    };
-
-    Ok(Transcript {
-        transcript_name: attributes
-            .get(options.transcript_name_key.as_str())
-            .map(|x| x.to_string()),
-        transcript_id: get_attr(options.transcript_id_key.as_str()),
-        gene_name: get_attr(options.gene_name_key.as_str()),
-        gene_id: get_attr(options.gene_id_key.as_str()),
-        is_coding: attributes
-            .get("transcript_type")
-            .map(|x| *x == "protein_coding"),
-        chrom: record.reference_sequence_name().to_string(),
-        left,
-        right,
-        strand: match record.strand() {
-            None => Strand::None,
-            Some(gtf::record::Strand::Forward) => Strand::Forward,
-            Some(gtf::record::Strand::Reverse) => Strand::Reverse,
-        },
-    })
-}
-
-fn from_gff(record: &gff::Record, options: &TranscriptParserOptions) -> Result<Transcript> {
-    if record.ty() != "transcript" {
-        bail!("record is not a transcript");
-    }
-
-    let left = record.start();
-    let right = record.end();
-    let attributes = record.attributes();
-    let get_attr = |key: &str| -> String {
-        attributes
-            .get(key)
-            .expect(&format!("failed to find '{}' in record: {}", key, record))
-            .to_string()
-    };
-
-    Ok(Transcript {
-        transcript_name: attributes
-            .get(options.transcript_name_key.as_str())
-            .map(|x| x.to_string()),
-        transcript_id: get_attr(options.transcript_id_key.as_str()),
-        gene_name: get_attr(options.gene_name_key.as_str()),
-        gene_id: get_attr(options.gene_id_key.as_str()),
-        is_coding: attributes
-            .get("transcript_type")
-            .map(|x| x.as_string() == Some("protein_coding")),
-        chrom: record.reference_sequence_name().to_string(),
-        left,
-        right,
-        strand: record.strand(),
-    })
-}
-
 impl Transcript {
     pub fn get_tss(&self) -> Option<usize> {
         match self.strand {
@@ -142,6 +72,39 @@ impl Transcript {
             }
             _ => None,
         }
+    }
+
+    fn from_record<R: gff::feature::Record + Debug>(record: &R, options: &TranscriptParserOptions) -> Result<Self> {
+        if record.ty() != "transcript" {
+            bail!("record is not a transcript");
+        }
+
+        let left = record.feature_start()?;
+        let right = record.feature_end()?;
+        let attributes = record.attributes();
+        let get_attr = |key: &str| -> String {
+            attributes
+                .get(key.as_bytes())
+                .expect(&format!("failed to find '{}' in record: {:?}", key, record)).unwrap()
+                .as_string().unwrap().to_string()
+        };
+        let get_attr_maybe = |key: &str| -> Option<String> {
+            attributes
+                .get(key.as_bytes())
+                .map(|v| v.unwrap().as_string().unwrap().to_string())
+        };
+
+        Ok(Self {
+            transcript_name: get_attr_maybe(options.transcript_name_key.as_str()),
+            transcript_id: get_attr(options.transcript_id_key.as_str()),
+            gene_name: get_attr(options.gene_name_key.as_str()),
+            gene_id: get_attr(options.gene_id_key.as_str()),
+            is_coding: get_attr_maybe("transcript_type").map(|x| x == "protein_coding"),
+            chrom: record.reference_sequence_name().to_string(),
+            left,
+            right,
+            strand: record.strand()?,
+        })
     }
 }
 
@@ -153,17 +116,13 @@ where
     R: BufRead,
 {
     let mut results = Vec::new();
-    input.lines().try_for_each(|line| {
-        let line = line?;
-        let line = gtf::Line::from_str(&line)
-            .with_context(|| format!("failed to parse GTF line: {}", line))?;
-        if let gtf::line::Line::Record(rec) = line {
-            if rec.ty() == "transcript" {
-                results.push(from_gtf(&rec, options)?);
-            }
+    let mut reader = gtf::io::Reader::new(BufReader::new(input));
+    for record in reader.record_bufs() {
+        let rec = record.with_context(|| "failed to read GFF record")?;
+        if rec.ty() == "transcript" {
+            results.push(Transcript::from_record(&rec, options)?);
         }
-        anyhow::Ok(())
-    })?;
+    }
     Ok(results)
 }
 
@@ -175,17 +134,13 @@ where
     R: BufRead,
 {
     let mut results = Vec::new();
-    input.lines().try_for_each(|line| {
-        let line = line?;
-        let line = gff::Line::from_str(&line)
-            .with_context(|| format!("failed to parse GFF line: {}", line))?;
-        if let gff::line::Line::Record(rec) = line {
-            if rec.ty() == "transcript" {
-                results.push(from_gff(&rec, options)?);
-            }
+    let mut reader = gff::io::Reader::new(BufReader::new(input));
+    for record in reader.record_bufs() {
+        let rec = record.with_context(|| "failed to read GFF record")?;
+        if rec.ty() == "transcript" {
+            results.push(Transcript::from_record(&rec, options)?);
         }
-        anyhow::Ok(())
-    })?;
+    }
     Ok(results)
 }
 

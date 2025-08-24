@@ -5,6 +5,7 @@ use bed_utils::bed::{BroadPeak, NarrowPeak, Strand};
 use indicatif::{ProgressIterator, ProgressStyle};
 use itertools::Itertools;
 use polars::prelude::Column;
+use pyo3::ffi::c_str;
 use snapatac2_core::utils::{self, Compression};
 use snapatac2_core::{
     preprocessing::Fragment,
@@ -372,13 +373,13 @@ pub fn create_fwtrack_obj<'py>(
     py: Python<'py>,
     files: Vec<PathBuf>,
 ) -> Result<(Bound<'py, PyAny>, Vec<Bound<'py, PyAny>>)> {
-    let macs = py.import_bound("MACS3.Signal.FixWidthTrack")?;
+    let macs = py.import("MACS3.Signal.FixWidthTrack")?;
     let merged = macs.getattr("FWTrack")?.call1((1000000,))?;
     let has_replicate = files.len() > 1;
     let replicates = files
         .into_iter()
         .map(|fl| {
-            let kwargs = pyo3::types::PyDict::new_bound(py);
+            let kwargs = pyo3::types::PyDict::new(py);
             kwargs.set_item("buffer_size", 100000)?;
             let fwt = macs.getattr("FWTrack")?.call((), Some(&kwargs))?;
             let reader = utils::open_file_for_read(&fl);
@@ -543,8 +544,8 @@ fn _call_peaks_bulk<'py, D: SnapData>(
     macs3_options: &Bound<'_, PyAny>,
     max_frag_size: Option<u64>,
 ) -> Result<Vec<NarrowPeak>> {
-    let macs = py.import_bound("MACS3.Signal.FixWidthTrack")?;
-    let kwargs = pyo3::types::PyDict::new_bound(py);
+    let macs = py.import("MACS3.Signal.FixWidthTrack")?;
+    let kwargs = pyo3::types::PyDict::new(py);
     kwargs.set_item("buffer_size", 100000)?;
     let fwt = macs.getattr("FWTrack")?.call((), Some(&kwargs))?;
 
@@ -578,18 +579,20 @@ fn _call_peaks_bulk<'py, D: SnapData>(
         })?;
     fwt.call_method0("finalize")?;
 
-    let outputs = pyo3::types::PyDict::new_bound(py);
-    let inputs = pyo3::types::PyDict::new_bound(py);
+    let outputs = pyo3::types::PyDict::new(py);
+    let inputs = pyo3::types::PyDict::new(py);
     inputs.set_item("fwt", fwt)?;
     inputs.set_item("options", macs3_options)?;
-    py.run_bound(
-        r#"
+    py.run(
+        c_str!(
+            r#"
 from MACS3.Signal.PeakDetect import PeakDetect
 peakdetect = PeakDetect(treat=fwt, opt=options)
 peakdetect.call_peaks()
 peakdetect.peaks.filter_fc(fc_low=options.fecutoff)
 peaks = peakdetect.peaks
-"#,
+"#
+        ),
         Some(&inputs),
         Some(&outputs),
     )?;

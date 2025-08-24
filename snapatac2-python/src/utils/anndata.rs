@@ -22,15 +22,13 @@ impl<'py> FromPyObject<'py> for PyAnnData<'py> {
     }
 }
 
-impl ToPyObject for PyAnnData<'_> {
-    fn to_object(&self, py: Python<'_>) -> PyObject {
-        self.0.to_object(py)
-    }
-}
+impl<'py> IntoPyObject<'py> for PyAnnData<'py> {
+    type Target = PyAny;
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
 
-impl IntoPy<PyObject> for PyAnnData<'_> {
-    fn into_py(self, py: Python<'_>) -> PyObject {
-        self.0.into_py(py)
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        self.0.into_pyobject(py)
     }
 }
 
@@ -171,21 +169,11 @@ impl<'py> SnapData for PyAnnData<'py> {
     }
 }
 
-#[derive(FromPyObject)]
+#[derive(FromPyObject, IntoPyObject)]
 pub enum AnnDataLike<'py> {
     AnnData(AnnData),
     PyAnnData(PyAnnData<'py>),
     AnnDataSet(AnnDataSet),
-}
-
-impl IntoPy<PyObject> for AnnDataLike<'_> {
-    fn into_py(self, py: Python<'_>) -> PyObject {
-        match self {
-            AnnDataLike::AnnData(x) => x.into_py(py),
-            AnnDataLike::PyAnnData(x) => x.into_py(py),
-            AnnDataLike::AnnDataSet(x) => x.into_py(py),
-        }
-    }
 }
 
 impl From<AnnData> for AnnDataLike<'_> {
@@ -235,19 +223,10 @@ macro_rules! with_anndata {
     };
 }
 
-#[derive(FromPyObject)]
+#[derive(FromPyObject, IntoPyObject)]
 pub enum RustAnnDataLike {
     AnnData(AnnData),
     AnnDataSet(AnnDataSet),
-}
-
-impl IntoPy<PyObject> for RustAnnDataLike {
-    fn into_py(self, py: Python<'_>) -> PyObject {
-        match self {
-            RustAnnDataLike::AnnData(x) => x.into_py(py),
-            RustAnnDataLike::AnnDataSet(x) => x.into_py(py),
-        }
-    }
 }
 
 impl From<AnnData> for RustAnnDataLike {

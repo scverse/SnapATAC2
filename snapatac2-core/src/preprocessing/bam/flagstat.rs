@@ -1,8 +1,8 @@
+use bincode::{Decode, Encode};
 use noodles::{bam::Record, sam::alignment::record::{Cigar, Flags, cigar::op::Kind}};
 use std::collections::{HashMap, HashSet};
 use anyhow::{Result, Context};
 use itertools::Itertools;
-use serde::{Serialize, Deserialize};
 
 use super::BarcodeLocation;
 
@@ -209,7 +209,7 @@ impl BamQC {
 }
 
 /// Minimal information about an alignment extracted from the BAM record.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Encode, Decode, Debug)]
 pub struct AlignmentInfo {
     pub name: String,
     pub reference_sequence_id: u16,
