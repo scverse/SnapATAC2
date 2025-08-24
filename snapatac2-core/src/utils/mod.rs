@@ -7,7 +7,7 @@ use std::io::{BufWriter, Write};
 use std::str::FromStr;
 use anyhow::{Result, Context};
 
-use bed_utils::bed::{BEDLike, NarrowPeak, merge_sorted_bed_with};
+use bed_utils::bed::{BEDLike, MergeBed, NarrowPeak};
 use bed_utils::extsort::ExternalSorterBuilder;
 
 pub fn merge_peaks<I>(peaks: I, half_window_size: u64) -> impl Iterator<Item = Vec<NarrowPeak>>
@@ -33,12 +33,12 @@ where
         x.peak = summit - x.start;
         x
     });
-    let input = ExternalSorterBuilder::new()
+    ExternalSorterBuilder::new()
         .with_compression(2)
         .build().unwrap()
         .sort_by(input, BEDLike::compare).unwrap()
-        .map(|x| x.unwrap());
-    merge_sorted_bed_with(input, iterative_merge)
+        .map(|x| x.unwrap())
+        .merge_sorted_bed_with(iterative_merge)
 }
 
 pub fn clip_peak(mut peak: NarrowPeak, chrom_sizes: &crate::genome::ChromSizes) -> NarrowPeak {

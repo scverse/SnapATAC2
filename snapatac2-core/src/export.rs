@@ -6,8 +6,9 @@ use crate::{
 };
 
 use anyhow::{bail, ensure, Context, Result};
+use bed_utils::bed::MergeBed;
 use bed_utils::{
-    bed::{io, map::GIntervalMap, merge_sorted_bedgraph, BEDLike, BedGraph},
+    bed::{io, map::GIntervalMap, BEDLike, BedGraph},
     extsort::ExternalSorterBuilder,
 };
 use bigtools::BigWigWrite;
@@ -295,22 +296,22 @@ where
     B: BEDLike,
 {
     let mut norm_factor = 0u64;
-    let bedgraph = fragments.flat_map(|frag| {
-        if blacklist_regions.map_or(false, |bl| bl.is_overlapped(&frag)) {
-            None
-        } else {
-            if include_for_norm.map_or(true, |x| x.is_overlapped(&frag))
-                && !exclude_for_norm.map_or(false, |x| x.is_overlapped(&frag))
-            {
-                norm_factor += frag.len();
+    let mut bedgraph: Vec<_> = fragments
+        .flat_map(|frag| {
+            if blacklist_regions.map_or(false, |bl| bl.is_overlapped(&frag)) {
+                None
+            } else {
+                if include_for_norm.map_or(true, |x| x.is_overlapped(&frag))
+                    && !exclude_for_norm.map_or(false, |x| x.is_overlapped(&frag))
+                {
+                    norm_factor += frag.len();
+                }
+                let mut frag = BedGraph::from_bed(&frag, 1.0f64);
+                fit_to_bin(&mut frag, bin_size);
+                Some(frag)
             }
-            let mut frag = BedGraph::from_bed(&frag, 1.0f64);
-            fit_to_bin(&mut frag, bin_size);
-            Some(frag)
-        }
-    });
-
-    let mut bedgraph: Vec<_> = merge_sorted_bedgraph(bedgraph)
+        })
+        .merge_sorted_bedgraph()
         .flat_map(|x| clip_bed(x, chrom_sizes))
         .collect();
 
@@ -377,8 +378,7 @@ where
     I: IntoIterator<Item = BedGraph<f64>>,
 {
     let n_bases = (ext_left + ext_right + 1) as f64;
-    let mut data: Vec<_> = data
-        .into_iter()
+    data.into_iter()
         .flat_map(|bed| {
             extend(bed.start(), bed.end(), ext_left, ext_right)
                 .into_iter()
@@ -386,9 +386,8 @@ where
                     BedGraph::new(bed.chrom(), s, e, bed.value * n as f64 / n_bases)
                 })
         })
-        .collect();
-    data.sort_unstable_by(|a, b| a.compare(b));
-    merge_sorted_bedgraph(data)
+        .sorted_unstable_by(|a, b| a.compare(b))
+        .merge_sorted_bedgraph()
 }
 
 fn extend(start: u64, end: u64, ext_left: u64, ext_right: u64) -> Vec<(u64, u64, u64)> {
@@ -477,8 +476,6 @@ fn fit_to_bin<B: BEDLike>(x: &mut B, bin_size: u64) {
 
 #[cfg(test)]
 mod tests {
-    use bed_utils::bed::merge_sorted_bed_with;
-
     use super::*;
 
     #[test]
@@ -654,7 +651,7 @@ mod tests {
                 .chunk_by(|x| x.value)
                 .into_iter()
                 .flat_map(|(_, groups)| {
-                    merge_sorted_bed_with(groups, |beds| {
+                    groups.merge_sorted_bed_with(|beds| {
                         let mut iter = beds.into_iter();
                         let mut first = iter.next().unwrap();
                         if let Some(last) = iter.last() {

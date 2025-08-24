@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
 use bed_utils::bed::{map::GIntervalMap, BEDLike, GenomicRange, ParseError, Strand};
+use bincode::{Decode, Encode};
 use ndarray::Array2;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{HashMap, HashSet},
@@ -203,7 +203,7 @@ impl<T: SnapData> QualityControl for T {}
 
 /// Fragments from single-cell ATAC-seq experiment. Each fragment is represented
 /// by a genomic coordinate, cell barcode and a integer value.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Encode, Decode, Debug, Clone)]
 pub struct Fragment {
     pub chrom: String,
     pub start: u64,
@@ -350,7 +350,7 @@ impl std::str::FromStr for Fragment {
 }
 
 /// Chromatin interactions from single-cell Hi-C experiment.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Encode, Decode, Debug)]
 pub struct Contact {
     pub chrom1: String,
     pub start1: u64,

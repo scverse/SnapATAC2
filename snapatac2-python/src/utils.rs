@@ -3,10 +3,11 @@ mod anndata;
 pub use self::anndata::AnnDataLike;
 
 use anyhow::Result;
-use bed_utils::bed::{merge_sorted_bed, BEDLike};
+use bed_utils::bed::{BEDLike, MergeBed};
 use bed_utils::extsort::ExternalSorterBuilder;
 use numpy::{
-    Element, IntoPyArray, Ix1, Ix2, PyArray, PyArrayMethods, PyReadonlyArray, PyReadonlyArrayDyn,
+    Element, IntoPyArray, Ix1, Ix2, PyArray, PyArrayMethods, PyReadonlyArray,
+    PyReadonlyArrayDyn,
 };
 use pyo3::{prelude::*, types::PyIterator, PyResult, Python};
 use snapatac2_core::genome::{
@@ -55,12 +56,11 @@ pub(crate) fn jaccard_similarity<'py>(
     macro_rules! with_csr {
         ($mat:expr) => {
             match other {
-                None => Ok(utils::similarity::jaccard($mat, weights_).into_pyarray_bound(py)),
+                None => Ok(utils::similarity::jaccard($mat, weights_).into_pyarray(py)),
                 Some(mat2) => {
                     macro_rules! xxx {
                         ($m:expr) => {
-                            Ok(utils::similarity::jaccard2($mat, $m, weights_)
-                                .into_pyarray_bound(py))
+                            Ok(utils::similarity::jaccard2($mat, $m, weights_).into_pyarray(py))
                         };
                     }
                     let shape: Vec<usize> = mat2.getattr("shape")?.extract()?;
@@ -120,11 +120,11 @@ pub(crate) fn cosine_similarity<'py>(
         Some(ref ws) => Some(ws.as_slice().unwrap()),
     };
     match other {
-        None => Ok(utils::similarity::cosine(csr_to_rust(mat)?, weights_).into_pyarray_bound(py)),
+        None => Ok(utils::similarity::cosine(csr_to_rust(mat)?, weights_).into_pyarray(py)),
         Some(mat2) => {
             Ok(
                 utils::similarity::cosine2(csr_to_rust(mat)?, csr_to_rust(mat2)?, weights_)
-                    .into_pyarray_bound(py),
+                    .into_pyarray(py),
             )
         }
     }
@@ -135,7 +135,7 @@ pub(crate) fn pearson<'py>(
     py: Python<'py>,
     mat: &Bound<'py, PyAny>,
     other: &Bound<'py, PyAny>,
-) -> PyResult<PyObject> {
+) -> Result<Bound<'py, PyAny>> {
     match mat.getattr("dtype")?.getattr("name")?.extract()? {
         "float32" => {
             let mat_ = mat.extract::<PyReadonlyArray<f32, Ix2>>()?.to_owned_array();
@@ -143,8 +143,8 @@ pub(crate) fn pearson<'py>(
                 .extract::<PyReadonlyArray<f32, Ix2>>()?
                 .to_owned_array();
             Ok(utils::similarity::pearson2(mat_, other_)
-                .into_pyarray_bound(py)
-                .to_object(py))
+                .into_pyarray(py)
+                .into_any())
         }
         "float64" => {
             let mat_ = mat.extract::<PyReadonlyArray<f64, Ix2>>()?.to_owned_array();
@@ -152,8 +152,8 @@ pub(crate) fn pearson<'py>(
                 .extract::<PyReadonlyArray<f64, Ix2>>()?
                 .to_owned_array();
             Ok(utils::similarity::pearson2(mat_, other_)
-                .into_pyarray_bound(py)
-                .to_object(py))
+                .into_pyarray(py)
+                .into_any())
         }
         ty => panic!("Cannot compute correlation for type {}", ty),
     }
@@ -164,7 +164,7 @@ pub(crate) fn spearman<'py>(
     py: Python<'py>,
     mat: &Bound<'py, PyAny>,
     other: &Bound<'py, PyAny>,
-) -> PyResult<PyObject> {
+) -> Result<Bound<'py, PyAny>> {
     match mat.getattr("dtype")?.getattr("name")?.extract()? {
         "float32" => {
             let mat_ = mat.extract::<PyReadonlyArray<f32, Ix2>>()?.to_owned_array();
@@ -174,16 +174,16 @@ pub(crate) fn spearman<'py>(
                         .extract::<PyReadonlyArray<f32, Ix2>>()?
                         .to_owned_array();
                     Ok(utils::similarity::spearman2(mat_, other_)
-                        .into_pyarray_bound(py)
-                        .to_object(py))
+                        .into_pyarray(py)
+                        .into_any())
                 }
                 "float64" => {
                     let other_ = other
                         .extract::<PyReadonlyArray<f64, Ix2>>()?
                         .to_owned_array();
                     Ok(utils::similarity::spearman2(mat_, other_)
-                        .into_pyarray_bound(py)
-                        .to_object(py))
+                        .into_pyarray(py)
+                        .into_any())
                 }
                 ty => panic!("Cannot compute correlation for type {}", ty),
             }
@@ -196,16 +196,16 @@ pub(crate) fn spearman<'py>(
                         .extract::<PyReadonlyArray<f32, Ix2>>()?
                         .to_owned_array();
                     Ok(utils::similarity::spearman2(mat_, other_)
-                        .into_pyarray_bound(py)
-                        .to_object(py))
+                        .into_pyarray(py)
+                        .into_any())
                 }
                 "float64" => {
                     let other_ = other
                         .extract::<PyReadonlyArray<f64, Ix2>>()?
                         .to_owned_array();
                     Ok(utils::similarity::spearman2(mat_, other_)
-                        .into_pyarray_bound(py)
-                        .to_object(py))
+                        .into_pyarray(py)
+                        .into_any())
                 }
                 ty => panic!("Cannot compute correlation for type {}", ty),
             }
@@ -327,7 +327,7 @@ pub(crate) fn intersect_bed<'py>(
             .into_records()
             .map(|x: Result<BED<3>, _>| (x.unwrap(), ()))
             .collect();
-    let res = PyIterator::from_bound_object(&regions)?
+    let res = PyIterator::from_object(&regions)?
         .map(|x| {
             bed_tree.is_overlapped(&GenomicRange::from_str(x.unwrap().extract().unwrap()).unwrap())
         })
@@ -400,13 +400,16 @@ pub fn read_transcripts<P: AsRef<std::path::Path>>(
 
 #[pyfunction]
 pub(crate) fn total_size_of_peaks(peaks: Vec<String>) -> Result<u64> {
-    let sorter = ExternalSorterBuilder::new()
+    Ok(ExternalSorterBuilder::new()
         .build()?
         .sort(
             peaks
                 .into_iter()
                 .map(|x| GenomicRange::from_str(&x).unwrap()),
         )?
-        .map(|x| x.unwrap());
-    Ok(merge_sorted_bed(sorter).map(|x| x.len()).sum())
+        .map(|x| x.unwrap())
+        .merge_sorted_bed()
+        .map(|x| x.len())
+        .sum()
+    )
 }

@@ -283,7 +283,6 @@ impl FeatureCounter for GeneCount<'_> {
     }
 
     fn get_values_and_counts(&self) -> impl Iterator<Item = (usize, (Self::Value, usize))> {
-        todo!();
         self.counter.get_values_and_counts()
     }
 }
