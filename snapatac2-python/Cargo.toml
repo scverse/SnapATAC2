@@ -13,13 +13,13 @@ keywords = ["single-cell", "biology"]
 [dependencies]
 snapatac2-core = { workspace = true }
 #anndata = "0.6.1"
-anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "58518951f79fbef30b2314f0893453d4bff97fc8"}
+anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "f712f9aaf523a6099e43ca521c3c0d65e6dd97df"}
 #anndata-hdf5 = "0.5"
-anndata-hdf5 = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "58518951f79fbef30b2314f0893453d4bff97fc8"}
+anndata-hdf5 = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "f712f9aaf523a6099e43ca521c3c0d65e6dd97df"}
 #anndata-zarr = "0.1"
-anndata-zarr = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "58518951f79fbef30b2314f0893453d4bff97fc8"}
+anndata-zarr = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "f712f9aaf523a6099e43ca521c3c0d65e6dd97df"}
 #pyanndata = "0.5.1"
-pyanndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "58518951f79fbef30b2314f0893453d4bff97fc8"}
+pyanndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "f712f9aaf523a6099e43ca521c3c0d65e6dd97df"}
 anyhow = "1.0"
 bed-utils = "0.9.2"
 flate2 = "1.0"
