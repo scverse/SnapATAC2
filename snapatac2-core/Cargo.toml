@@ -35,14 +35,14 @@ polars = { version = "0.49", features = ["ndarray", "dtype-categorical"] }
 rayon = "1.11"
 regex = "1.11"
 statrs = "0.18"
-smallvec = "1.13"
-sanitize-filename = "0.5"
+smallvec = "1.15"
+sanitize-filename = "0.6"
 tempfile = "3.3"
 zstd = { version = "0.13", features = ["zstdmt"] }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
-rand = "0.8.5"
+criterion = { version = "0.7", features = ["html_reports"] }
+rand = "0.9"
 
 [[bench]]
 name = "benchmark"
