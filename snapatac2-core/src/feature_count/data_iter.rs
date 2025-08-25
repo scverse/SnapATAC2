@@ -40,20 +40,23 @@ fn single_to_fragments(
                 let row_end = row_offsets[i + 1];
                 (row_start..row_end)
                     .flat_map(|j| {
-                        let (chrom, start) = index.get_position(col_indices[j]);
+                        let (chrom, pos_5p) = index.get_position(col_indices[j]);
                         if exclude_chroms.contains(chrom) {
                             None
                         } else {
-                            let size = values[j];
+                            let size = values[j] as i64;
                             let barcode = None;
                             let count = 1;
+                            let start;
                             let end;
                             let strand;
                             if size > 0 {
-                                end = start + size as u64;
+                                start = pos_5p;
+                                end = start.checked_add_signed(size).unwrap();
                                 strand = Some(Strand::Forward);
                             } else {
-                                end = start + 1;
+                                end = pos_5p + 1;
+                                start = end.checked_add_signed(size).unwrap();
                                 strand = Some(Strand::Reverse);
                             }
                             Some(Fragment {

@@ -127,11 +127,21 @@ def test_reproducibility(mat):
         np.testing.assert_array_equal(x, leiden[0])
 
 def read_bed(bed_file):
+    content = []
     with gzip.open(bed_file, 'rt') as f:
-        return sorted([line.strip().split('\t')[:4] for line in f if line.startswith('chr')])
+        for line in f:
+            if line.startswith('chr'):
+                items = line.strip().split('\t')
+                items.pop(4)
+                content.append(items)
+        return sorted(content)
 
 def test_import(datadir):
-    test_files = [snap.datasets.pbmc500(downsample=True), str(datadir.join('test_clean.tsv.gz'))]
+    test_files = [
+        snap.datasets.pbmc500(downsample=True),
+        str(datadir.join('test_clean.tsv.gz')),
+        str(datadir.join('test_single.tsv.gz')),
+    ]
 
     for fl in test_files:
         data = snap.pp.import_fragments(
@@ -144,7 +154,10 @@ def test_import(datadir):
         data.obs['group'] = 'test_import'
         outputs = snap.ex.export_fragments(data, groupby="group", out_dir=str(datadir), suffix='.bed.gz')
 
-        assert read_bed(list(outputs.values())[0]) == read_bed(fl)
+        gold = read_bed(fl)
+        test = read_bed(list(outputs.values())[0])
+        for i, (g, t) in enumerate(zip(gold, test)):
+            assert g == t, f"Line {i} mismatch: {g} != {t}"
 
 def test_tile_matrix(datadir):
     def total_count(adata, bin_size):

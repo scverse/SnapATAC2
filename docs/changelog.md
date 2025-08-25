@@ -12,6 +12,11 @@
 
   - `pp.import_data` is removed in favor of `pp.import_fragments`.
 
+### Bugs fixed:
+
+  - Fix single-ended reads export in `ex.export_fragments`.
+  - Various minor bug fixes related to python AnnData conversion.
+
 ## Release 2.8.0 (released December 13, 2024)
 
 ### Features:

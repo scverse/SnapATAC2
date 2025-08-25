@@ -27,8 +27,9 @@ def export_fragments(
         The (annotated) data matrix of shape `n_obs` x `n_vars`.
         Rows correspond to cells and columns to regions.
     groupby
-        Group the cells. If a `str`, groups are obtained from
-        `.obs[groupby]`.
+        Group the cells. If a list of `str`, each element is the group name of the corresponding cell.
+        The length of the list must be equal to `n_obs`. If a `str`, groups are obtained from
+        `.obs[groupby]`. 
     selections
         Export only the selected groups.
     ids
@@ -120,8 +121,9 @@ def export_coverage(
         The (annotated) data matrix of shape `n_obs` x `n_vars`.
         Rows correspond to cells and columns to regions.
     groupby
-        Group the cells. If a `str`, groups are obtained from
-        `.obs[groupby]`.
+        Group the cells. If a list of `str`, each element is the group name of the corresponding cell.
+        The length of the list must be equal to `n_obs`. If a `str`, groups are obtained from
+        `.obs[groupby]`. 
     selections
         Export only the selected groups.
     bin_size
