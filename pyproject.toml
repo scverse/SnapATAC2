@@ -4,7 +4,8 @@ build-backend = "maturin"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
-python-source = "python"
+manifest-path = "snapatac2-python/Cargo.toml"
+python-source = "snapatac2-python/python"
 module-name = "snapatac2._snapatac2"
 
 [project]
@@ -28,7 +29,7 @@ requires-python = ">=3.9, <3.15"
 dynamic = ["version"]
 
 dependencies = [
-    'anndata >= 0.8.0, < 0.11.0',
+    'anndata >= 0.8.0',
     'kaleido',
     'multiprocess',
     'MACS3 >= 3.0.3, < 3.1',
@@ -66,4 +67,4 @@ recommend = [
     "scikit-misc>=0.1.3",
     "magic-impute>=2.0",
 ]
-test = ["pytest", "hypothesis==6.72.4", "distutils"]
+test = ["pytest", "hypothesis==6.72.4"]
