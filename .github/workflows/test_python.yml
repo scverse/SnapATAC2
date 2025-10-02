@@ -25,7 +25,6 @@ jobs:
 
     - name: Build Python package
       run: |
-        cd ${GITHUB_WORKSPACE}/snapatac2-python
         pip install --user .
         pytest tests
 
