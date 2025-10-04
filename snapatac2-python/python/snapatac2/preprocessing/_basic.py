@@ -290,7 +290,7 @@ def import_fragments(
     See Also
     --------
     make_fragment_file
-    :func:`~snapatac2.ex.export_fragments` 
+    :func:`~snapatac2.pp.make_fragment_file` 
 
     Examples
     --------

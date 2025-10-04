@@ -10,7 +10,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::feature_count::{FragmentDataIter, SnapData};
+use crate::feature_count::{CompressedFragmentIter, SnapData};
 
 pub type CellBarcode = String;
 
@@ -122,7 +122,7 @@ pub trait QualityControl: SnapData {
     /// and the index represents the fragment length. The first posision of the vector is
     /// reserved for fragments with length larger than the maximum length.
     fn fragment_size_distribution(&self, max_size: usize) -> Result<Vec<usize>> {
-        if let FragmentDataIter::FragmentPaired(fragments) =
+        if let CompressedFragmentIter::FragmentPaired(fragments) =
             self.get_fragment_iter(500)?.into_inner()
         {
             let mut size_distr = vec![0; max_size + 1];

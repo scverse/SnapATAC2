@@ -9,10 +9,11 @@ from snapatac2.tools._misc import aggregate_X
 from snapatac2._utils import find_elbow, is_anndata
 from ._base import render_plot, heatmap, kde2d, scatter, scatter3d
 from ._network import network_scores, network_edge_stat
+import snapatac2._snapatac2 as internal
 
 __all__ = [
     'tsse', 'frag_size_distr', 'umap', 'network_scores', 'spectral_eigenvalues',
-    'regions', 'motif_enrichment',
+    'regions', 'motif_enrichment', 'coverage'
 ]
 
 def valid_cells(
@@ -380,3 +381,85 @@ def motif_enrichment(
         colorscale='RdBu_r',
         **kwargs,
     )
+
+def coverage(
+    adata: AnnData,
+    region: str,
+    groupby: str | list[str],
+    out_file: str | None = None,
+):
+    """
+    Plot the coverage tracks for different groups of cells. This function requires
+    `matplotlib` to be installed.
+
+    This is a simple implementation for quick visualization. For more advanced
+    visualization, please consider exporting the data using 
+    :func:`~snapatac2.ex.export_coverage` and visualize it using a genome browser.
+
+    Parameters
+    ----------
+    adata
+        Annotated data matrix.
+    region
+        Genomic region, e.g. 'chr1:100000-200000'.
+    groupby
+        Group the cells into different groups. If a `str`, groups are obtained from
+        `.obs[groupby]`.
+    out_file
+        Path of the output file for saving the output image.
+
+    See Also
+    --------
+    export_coverage
+    :func:`~snapatac2.ex.export_coverage` 
+    """
+
+    from matplotlib import pyplot as plt
+
+    groupby = adata.obs[groupby] if isinstance(groupby, str) else groupby
+    groupby = [x for x in groupby]
+    signal_values = []
+    track_names = []
+    for k, v in sorted(list(internal.get_coverage(adata, region, groupby).items())):
+        track_names.append(k)
+        signal_values.append(v)
+    signal_values = np.array(signal_values)
+
+    start, end = region.split(":")[1].split("-")
+    start = int(start)
+    end = int(end)
+    height_per_track = 1.2
+    width = 6
+
+    n_tracks, n_points = signal_values.shape
+    fig, axes = plt.subplots(
+        n_tracks, 1,
+        figsize=[width, n_tracks * height_per_track],
+        sharex=True,
+        constrained_layout=True,
+    )
+
+    if n_tracks == 1:
+        axes = [axes]
+
+    # Compute global max for y-axis scaling
+    global_max = signal_values.max()
+
+    cmap = plt.get_cmap("tab10")
+    for i, (ax, signal) in enumerate(zip(axes, signal_values)):
+        color = cmap(i % 10)   # cycle through colors if >10 tracks
+        ax.fill_between(range(n_points), 0, signal, color=color)
+        ax.set_title(track_names[i], fontsize=7)
+        ax.spines[['top', 'right']].set_visible(False)
+        ax.set_ylim(0, global_max)
+
+    axes[-1].set_xticks([0, n_points - 1])
+    axes[-1].set_xticklabels([str(start), str(end)])
+    axes[-1].set_xlabel(region)
+
+    fig.supylabel("RPM")
+
+    if out_file is None:
+        plt.show()
+    else:
+        plt.savefig(out_file, dpi=300, bbox_inches='tight')

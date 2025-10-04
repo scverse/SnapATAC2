@@ -4,9 +4,10 @@
 
 ### Features:
 
-  - Support python 3.13.
+  - Support python 3.13 and 3.14.
   - Add Zarr backend support for AnnData.
   - Improve the precision of p values in `tl.motif_enrichment`.
+  - Add `pl.coverage` for quick visualization of signal coverage.
 
 ### Breaking Changes:
 
@@ -16,6 +17,7 @@
 
   - Fix single-ended reads export in `ex.export_fragments`.
   - Various minor bug fixes related to python AnnData conversion.
+  - Fix #408.
 
 ## Release 2.8.0 (released December 13, 2024)
 
