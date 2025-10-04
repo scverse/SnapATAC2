@@ -19,11 +19,16 @@ use std::{
     ops::AddAssign,
 };
 
-pub enum FragmentDataIter {
+/// Represents an iterator over compressed fragment data. Fragments can be either single-end or paired-end.
+/// The iterator yields tuples containing a compressed sparse row matrix, a start index, and an end
+/// index. The matrix contains fragment information, where the row indices correspond to different cells
+/// and the column indices correspond to genomic positions.
+pub enum CompressedFragmentIter {
     FragmentSingle(Box<dyn Sync + ExactSizeIterator<Item = (CsrNonCanonical<i32>, usize, usize)>>),
     FragmentPaired(Box<dyn Sync + ExactSizeIterator<Item = (CsrNonCanonical<u32>, usize, usize)>>),
 }
 
+/// Helper function to convert single-end fragment data to raw fragments.
 fn single_to_fragments(
     index: GenomeBaseIndex,
     exclude_chroms: HashSet<String>,
@@ -76,6 +81,7 @@ fn single_to_fragments(
     })
 }
 
+/// Helper function to convert paired-end fragment data to raw fragments.
 fn pair_to_fragments(
     index: GenomeBaseIndex,
     exclude_chroms: HashSet<String>,
@@ -127,7 +133,7 @@ fn pair_to_fragments(
 /// to exclude certain chromosomes.
 pub struct FragmentData {
     index: GenomeBaseIndex,
-    data_iter: FragmentDataIter,
+    data_iter: CompressedFragmentIter,
     resolution: usize,
     exclude_chroms: HashSet<String>,
     min_fragment_size: Option<u64>,
@@ -136,7 +142,7 @@ pub struct FragmentData {
 }
 
 impl FragmentData {
-    pub fn new(chrom_sizes: ChromSizes, data_iter: FragmentDataIter) -> Self {
+    pub fn new(chrom_sizes: ChromSizes, data_iter: CompressedFragmentIter) -> Self {
         Self {
             index: GenomeBaseIndex::new(&chrom_sizes),
             data_iter,
@@ -148,12 +154,12 @@ impl FragmentData {
         }
     }
 
-    pub fn into_inner(self) -> FragmentDataIter {
+    pub fn into_inner(self) -> CompressedFragmentIter {
         self.data_iter
     }
 
     pub fn is_paired(&self) -> bool {
-        matches!(self.data_iter, FragmentDataIter::FragmentPaired(_))
+        matches!(self.data_iter, CompressedFragmentIter::FragmentPaired(_))
     }
 
     pub fn get_gindex(&self) -> GenomeBaseIndex {
@@ -213,10 +219,10 @@ impl FragmentData {
         self,
     ) -> Box<dyn ExactSizeIterator<Item = (Vec<Vec<Fragment>>, usize, usize)>> {
         match self.data_iter {
-            FragmentDataIter::FragmentSingle(iter) => {
+            CompressedFragmentIter::FragmentSingle(iter) => {
                 Box::new(single_to_fragments(self.index, self.exclude_chroms, iter))
             }
-            FragmentDataIter::FragmentPaired(iter) => Box::new(pair_to_fragments(
+            CompressedFragmentIter::FragmentPaired(iter) => Box::new(pair_to_fragments(
                 self.index,
                 self.exclude_chroms,
                 self.min_fragment_size,
@@ -257,7 +263,7 @@ impl FragmentData {
         let index = self.get_gindex();
         let ori_index = self.index;
         match self.data_iter {
-            FragmentDataIter::FragmentPaired(mat_iter) => {
+            CompressedFragmentIter::FragmentPaired(mat_iter) => {
                 Box::new(mat_iter.map(move |(mat, i, j)| {
                     let new_mat = gen_mat_pair::<u32>(
                         &ori_index,
@@ -271,7 +277,7 @@ impl FragmentData {
                     (new_mat, i, j)
                 }))
             }
-            FragmentDataIter::FragmentSingle(mat_iter) => {
+            CompressedFragmentIter::FragmentSingle(mat_iter) => {
                 Box::new(mat_iter.map(move |(mat, i, j)| {
                     let new_mat =
                         gen_mat_single::<u32>(&ori_index, &index, &self.exclude_chroms, mat);

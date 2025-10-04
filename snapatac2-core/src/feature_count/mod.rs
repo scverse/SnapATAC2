@@ -7,7 +7,7 @@ use std::str::FromStr;
 use anyhow::{bail, Context, Result};
 use anndata::{data::DynCsrMatrix, AnnData, AnnDataOp, AnnDataSet, ArrayElemOp, AxisArraysOp, Backend, ElemCollectionOp};
 use bed_utils::bed::GenomicRange;
-pub use data_iter::{ValueType, BaseValue, ChromValueIter, BaseData, FragmentData, ContactData, FragmentDataIter};
+pub use data_iter::{ValueType, BaseValue, ChromValueIter, BaseData, FragmentData, ContactData, CompressedFragmentIter};
 pub use counter::{FeatureCounter, CountingStrategy};
 pub use matrix::{create_gene_matrix, create_tile_matrix, create_peak_matrix};
 use nalgebra_sparse::CsrMatrix;
@@ -78,12 +78,12 @@ pub trait SnapData: AnnDataOp {
 impl<B: Backend> SnapData for AnnData<B> {
     fn get_fragment_iter(&self, chunk_size: usize) -> Result<FragmentData> {
         let obsm = self.obsm();
-        let matrices: FragmentDataIter = if let Some(insertion) =
+        let matrices: CompressedFragmentIter = if let Some(insertion) =
             obsm.get_item_iter(FRAGMENT_SINGLE, chunk_size)
         {
-            FragmentDataIter::FragmentSingle(Box::new(insertion))
+            CompressedFragmentIter::FragmentSingle(Box::new(insertion))
         } else if let Some(fragment) = obsm.get_item_iter(FRAGMENT_PAIRED, chunk_size) {
-            FragmentDataIter::FragmentPaired(Box::new(fragment))
+            CompressedFragmentIter::FragmentPaired(Box::new(fragment))
         } else {
             bail!("one of the following keys must be present in the '.obsm': '{}', '{}'", FRAGMENT_SINGLE, FRAGMENT_PAIRED)
         };
@@ -104,12 +104,12 @@ impl<B: Backend> SnapData for AnnDataSet<B> {
     fn get_fragment_iter(&self, chunk_size: usize) -> Result<FragmentData> {
         let adatas = self.adatas().inner();
         let obsm = adatas.get_obsm();
-        let matrices: FragmentDataIter = if let Some(insertion) =
+        let matrices: CompressedFragmentIter = if let Some(insertion) =
             obsm.get_item_iter(FRAGMENT_SINGLE, chunk_size)
         {
-            FragmentDataIter::FragmentSingle(Box::new(insertion))
+            CompressedFragmentIter::FragmentSingle(Box::new(insertion))
         } else if let Some(fragment) = obsm.get_item_iter(FRAGMENT_PAIRED, chunk_size) {
-            FragmentDataIter::FragmentPaired(Box::new(fragment))
+            CompressedFragmentIter::FragmentPaired(Box::new(fragment))
         } else {
             bail!("one of the following keys must be present in the '.obsm': '{}', '{}'", FRAGMENT_SINGLE, FRAGMENT_PAIRED)
         };

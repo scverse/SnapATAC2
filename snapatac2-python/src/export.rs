@@ -1,13 +1,13 @@
 use crate::utils::{read_genomic_ranges, AnnDataLike};
 use snapatac2_core::{
     export::{CoverageOutputFormat, Exporter, Normalization},
-    utils,
+    utils, SnapData,
 };
 
 use anndata::Backend;
 use anndata_hdf5::H5;
-use anyhow::Result;
-use bed_utils::bed::{io::Reader, map::GIntervalMap, GenomicRange};
+use anyhow::{ensure, Result};
+use bed_utils::bed::{io::Reader, map::GIntervalMap, BEDLike, GenomicRange};
 use pyo3::{prelude::*, pybacked::PyBackedStr};
 use std::ops::Deref;
 use std::str::FromStr;
@@ -138,4 +138,56 @@ pub fn export_coverage(
         };
     }
     crate::with_anndata!(&anndata, run)
+}
+
+#[pyfunction]
+pub fn get_coverage(adata: AnnDataLike, region: &str, groups: Vec<String>) -> Result<HashMap<String, Vec<f64>>> {
+    macro_rules! run {
+        ($data:expr) => {
+            get_coverage_helper($data, region, &groups)
+        };
+    }
+    crate::with_anndata!(&adata, run)
+}
+ 
+fn get_coverage_helper<A: SnapData>(
+    adata: &A,
+    region: &str,
+    groups: &[String],
+) -> Result<HashMap<String, Vec<f64>>> {
+    ensure!(
+        adata.n_obs() == groups.len(),
+        "Length of groups must match number of cells"
+    );
+
+    let region = GenomicRange::from_str(region).unwrap();
+    let mut total_counts = HashMap::new();
+    let mut counts = HashMap::new();
+    adata
+        .get_fragment_iter(1000)?
+        .into_fragment_groups(|i| &groups[i])
+        .for_each(|frags| {
+            frags.into_iter().for_each(|(k, frags)| {
+                let total = total_counts.entry(k.to_string()).or_insert(0);
+                let count = counts
+                    .entry(k.to_string())
+                    .or_insert(vec![0.0; region.len() as usize]);
+
+                frags.iter().for_each(|(_, f)| {
+                    *total += f.len();
+                    let start =
+                        f.start().max(region.start()).saturating_sub(region.start()) as usize;
+                    let end = f.end().min(region.end()).saturating_sub(region.start()) as usize;
+                    for i in start..end {
+                        count[i] += 1.0;
+                    }
+                });
+            })
+        });
+
+    counts.iter_mut().for_each(|(k, v)| {
+        let total = *total_counts.get(k).unwrap() as f64 / 1e6;
+        v.iter_mut().for_each(|x| *x /= total);
+    });
+    Ok(counts)
 }

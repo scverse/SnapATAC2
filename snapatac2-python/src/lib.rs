@@ -53,6 +53,7 @@ fn _snapatac2(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(export::export_fragments, m)?)?;
     m.add_function(wrap_pyfunction!(export::export_coverage, m)?)?;
+    m.add_function(wrap_pyfunction!(export::get_coverage, m)?)?;
 
     m.add_function(wrap_pyfunction!(call_peaks::export_tags, m)?)?;
     m.add_function(wrap_pyfunction!(call_peaks::create_fwtrack_obj, m)?)?;
