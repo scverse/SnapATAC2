@@ -8,7 +8,7 @@ use pyanndata::anndata::memory;
 use pyanndata::{AnnData, AnnDataSet};
 use pyo3::prelude::*;
 
-use snapatac2_core::feature_count::{BaseData, FragmentData, FragmentDataIter};
+use snapatac2_core::feature_count::{BaseData, CompressedFragmentIter, FragmentData};
 use snapatac2_core::{
     feature_count::{BASE_VALUE, FRAGMENT_PAIRED, FRAGMENT_SINGLE},
     SnapData,
@@ -34,8 +34,14 @@ impl<'py> IntoPyObject<'py> for PyAnnData<'py> {
 
 impl<'py> AnnDataOp for PyAnnData<'py> {
     type X = memory::ArrayElem<'py>;
-    type ElemCollectionRef<'a> = memory::ElemCollection<'a> where Self: 'a;
-    type AxisArraysRef<'a> = memory::AxisArrays<'a> where Self: 'a;
+    type ElemCollectionRef<'a>
+        = memory::ElemCollection<'a>
+    where
+        Self: 'a;
+    type AxisArraysRef<'a>
+        = memory::AxisArrays<'a>
+    where
+        Self: 'a;
     fn x(&self) -> Self::X {
         self.0.x()
     }
@@ -141,11 +147,11 @@ impl<'py> AnnDataOp for PyAnnData<'py> {
 impl<'py> SnapData for PyAnnData<'py> {
     fn get_fragment_iter(&self, chunk_size: usize) -> Result<FragmentData> {
         let obsm = self.obsm();
-        let matrices: FragmentDataIter =
+        let matrices: CompressedFragmentIter =
             if let Some(insertion) = obsm.get_item_iter(FRAGMENT_SINGLE, chunk_size) {
-                FragmentDataIter::FragmentSingle(Box::new(insertion))
+                CompressedFragmentIter::FragmentSingle(Box::new(insertion))
             } else if let Some(fragment) = obsm.get_item_iter(FRAGMENT_PAIRED, chunk_size) {
-                FragmentDataIter::FragmentPaired(Box::new(fragment))
+                CompressedFragmentIter::FragmentPaired(Box::new(fragment))
             } else {
                 bail!(
                     "one of the following keys must be present in the '.obsm': '{}', '{}'",

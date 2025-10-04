@@ -212,7 +212,7 @@ impl BamQC {
 #[derive(Encode, Decode, Debug)]
 pub struct AlignmentInfo {
     pub name: String,
-    pub reference_sequence_id: u16,
+    pub reference_sequence_id: u32,
     flags: u16,
     pub alignment_start: u32,
     pub alignment_end: u32,

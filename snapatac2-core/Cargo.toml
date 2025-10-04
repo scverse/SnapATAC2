@@ -11,7 +11,7 @@ keywords = ["single-cell", "biology"]
 
 [dependencies]
 #anndata = "0.6.1"
-anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "f712f9aaf523a6099e43ca521c3c0d65e6dd97df"}
+anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "abe4c2cf7ec7af1cc03a9e337b2af8bdf602ef5b"}
 anyhow = "1.0"
 bstr = "1.12"
 byteorder = "1.5"
@@ -29,9 +29,9 @@ lexical = "7"
 log = "0.4"
 ndarray = { version = "0.16", features = ["rayon"] }
 num = "0.4"
-noodles = { version = "0.100", features = ["core", "fastq", "bam", "sam", "gff", "gtf"] }
+noodles = { version = "0.101", features = ["core", "fastq", "bam", "sam", "gff", "gtf"] }
 nalgebra-sparse = "0.11"
-polars = { version = "0.49", features = ["ndarray", "dtype-categorical"] }
+polars = { version = "0.51", features = ["ndarray", "dtype-categorical"] }
 rayon = "1.11"
 regex = "1.11"
 statrs = "0.18"
