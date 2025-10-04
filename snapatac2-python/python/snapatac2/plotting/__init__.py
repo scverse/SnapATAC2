@@ -420,7 +420,7 @@ def coverage(
     groupby = [x for x in groupby]
     signal_values = []
     track_names = []
-    for k, v in internal.get_coverage(adata, region, groupby).items():
+    for k, v in sorted(list(internal.get_coverage(adata, region, groupby).items())):
         track_names.append(k)
         signal_values.append(v)
     signal_values = np.array(signal_values)
@@ -428,25 +428,37 @@ def coverage(
     start, end = region.split(":")[1].split("-")
     start = int(start)
     end = int(end)
-    height_per_track = 1.5
-    width = 8
+    height_per_track = 1.2
+    width = 6
 
     n_tracks, n_points = signal_values.shape
-    fig, axes = plt.subplots(n_tracks, 1, figsize=[width, n_tracks * height_per_track], sharex=True)
+    fig, axes = plt.subplots(
+        n_tracks, 1,
+        figsize=[width, n_tracks * height_per_track],
+        sharex=True,
+        constrained_layout=True,
+    )
 
     if n_tracks == 1:
         axes = [axes]
 
+    # Compute global max for y-axis scaling
+    global_max = signal_values.max()
+
+    cmap = plt.get_cmap("tab10")
     for i, (ax, signal) in enumerate(zip(axes, signal_values)):
-        ax.fill_between(range(n_points), 0, signal, color='black')
+        color = cmap(i % 10)   # cycle through colors if >10 tracks
+        ax.fill_between(range(n_points), 0, signal, color=color)
         ax.set_title(track_names[i], fontsize=7)
         ax.spines[['top', 'right']].set_visible(False)
+        ax.set_ylim(0, global_max)
 
     axes[-1].set_xticks([0, n_points - 1])
     axes[-1].set_xticklabels([str(start), str(end)])
     axes[-1].set_xlabel(region)
 
-    plt.tight_layout()
+    fig.supylabel("RPM")
+
     if out_file is None:
         plt.show()
     else:
