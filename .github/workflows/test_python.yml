@@ -25,9 +25,8 @@ jobs:
 
     - name: Build Python package
       run: |
-        cd ${GITHUB_WORKSPACE}/snapatac2-python
         pip install --user .
-        pytest tests
+        pytest snapatac2-python/tests
 
     - uses: ./.github/actions/build-docs
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
