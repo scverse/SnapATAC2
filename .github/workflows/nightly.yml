@@ -11,7 +11,7 @@ jobs:
       NEW_COMMITS: ${{ steps.check-commits.outputs.NEW_COMMITS }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Get latest commit SHA
         id: get-latest-commit-sha

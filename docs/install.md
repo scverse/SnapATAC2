@@ -60,7 +60,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 Once you have the Rust compiler properly installed, you can use pip to install the SnapATAC2 library:
 
 ```
-pip install 'git+https://github.com/scverse/SnapATAC2.git#egg=snapatac2&subdirectory=snapatac2-python'
+pip install 'git+https://github.com/scverse/SnapATAC2.git#egg=snapatac2'
 ```
 
 Optional dependencies
