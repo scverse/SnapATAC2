@@ -4,7 +4,7 @@ description: 'Build documentation'
 inputs:
   python-version:
     required: false
-    default: "3.11"
+    default: "3.12"
 
 runs:
   using: "composite"
@@ -69,7 +69,7 @@ runs:
       echo "Preferred version is $VERSION"
 
   - name: Checkout code from gh-pages branch into folder
-    uses: actions/checkout@v2
+    uses: actions/checkout@v5
     with:
       ref: 'gh-pages'
       path: 'gh-pages-folder'

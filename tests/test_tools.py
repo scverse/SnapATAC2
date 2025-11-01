@@ -178,3 +178,19 @@ def test_tile_matrix(datadir):
     counts = [total_count(data, i) for i in [500, 1000, 5000, 10000]]
     for i in range(1, len(counts)):
         assert counts[i] == counts[i - 1], f"Bin size {i} failed"
+
+def test_spectral():
+    fragment_file = snap.datasets.pbmc500(downsample=True)
+    data = snap.pp.import_fragments(
+        fragment_file,
+        chrom_sizes=snap.genome.hg38,
+        sorted_by_barcode=False,
+    )
+    snap.pp.add_tile_matrix(data)
+    snap.metrics.tsse(data, snap.genome.hg38)
+    snap.pp.filter_cells(data)
+    snap.pp.select_features(data, n_features=4000)
+    sp1 = snap.tl.spectral(data, random_state=0, inplace=False)[0]
+    sp2 = snap.tl.spectral(data, random_state=0, inplace=False)[0]
+    np.testing.assert_array_equal(sp1, sp2)
+ 

@@ -25,11 +25,11 @@ jobs:
        CIBW_SKIP: "pp* *-win32 *-musllinux*"
        CIBW_BUILD: ${{ matrix.python_version }}
        CIBW_TEST_REQUIRES: pytest hypothesis==6.72.4
-       CIBW_TEST_COMMAND: "pytest {project}/snapatac2-python/tests"
+       CIBW_TEST_COMMAND: "pytest {project}/tests"
 
     steps:
       - name: Checkout code
-        uses: nschloe/action-cached-lfs-checkout@v1
+        uses: actions/checkout@v5
 
       - uses: ./.github/actions/setup-rust
 
@@ -39,10 +39,10 @@ jobs:
           python-version: '3.12'
 
       - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==3.1.*
+        run: python -m pip install cibuildwheel==3.2.*
 
       - name: Build wheels
-        run: python -m cibuildwheel --output-dir wheelhouse snapatac2-python
+        run: python -m cibuildwheel --output-dir wheelhouse .
 
       - uses: actions/upload-artifact@v4
         with:
@@ -65,9 +65,9 @@ jobs:
 
       - name: Build sdist
         run: maturin sdist
-        working-directory: snapatac2-python
+        working-directory: ./
 
       - uses: actions/upload-artifact@v4
         with:
           name: snapatac2-sdist
-          path: snapatac2-python/target/wheels/*.tar.gz
+          path: target/wheels/*.tar.gz

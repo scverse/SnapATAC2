@@ -12,6 +12,7 @@
 ### Breaking Changes:
 
   - `pp.import_data` is removed in favor of `pp.import_fragments`.
+  - h5ad files are compressed using zstandard by default as this results in smaller file sizes and faster read/write speeds. hdf5plugin is needed to read/write these files if using the anndata python package.
 
 ### Bugs fixed:
 
