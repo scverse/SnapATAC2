@@ -9,26 +9,49 @@ jobs:
     - name: Checkout code
       uses: nschloe/action-cached-lfs-checkout@v1
 
-    - uses: actions/setup-python@v4
+    - name: Install dependencies
+      run: |
+        sudo apt-get install -y pandoc jq
+
+    - uses: actions/setup-python@v6
       name: Install Python
       with:
           python-version: '3.12'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
 
     - uses: ./.github/actions/setup-rust
       with:
         cache: true
 
-    - name: Install dependencies
-      run: |
-        pip install --user --upgrade pip
-        pip install --user pytest hypothesis==6.72.4 wheel
+    - name: Install the project
+      run: uv sync --all-groups
 
-    - name: Build Python package
-      run: |
-        pip install --user .
-        pytest tests
+    - name: Run tests
+      run: uv run pytest tests
 
-    - uses: ./.github/actions/build-docs
+    - name: Get SnapATAC2 version
+      id: get_version
+      shell: bash
+      run: |
+        VERSION=$(uv run python -c "import snapatac2;print('.'.join(snapatac2.__version__.split('.')[:2]))")
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        IS_DEV=$(uv run python -c "import snapatac2;print('dev' in snapatac2.__version__)")
+        if [[ $IS_DEV == "True" ]]; then
+          echo "DEPLOYMENT=dev" >> $GITHUB_ENV
+        else
+          echo "DEPLOYMENT=stable" >> $GITHUB_ENV
+        fi
+
+    - name: Build doc
+      shell: bash
+      run: uv run sphinx-build ${GITHUB_WORKSPACE}/docs _build/html
+
+    - uses: ./.github/actions/publish-docs
+      with:
+        type: ${{ env.DEPLOYMENT }}
+        version: ${{ env.VERSION }}
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
   build-wheel:

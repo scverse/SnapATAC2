@@ -30,7 +30,7 @@ def test_exclude():
     np.testing.assert_array_equal(data1.obs_names, data2.obs_names)
     np.testing.assert_array_equal(data1.var_names, data2.var_names)
 
-def pipeline(data):
+def pipeline(data, tmp_path):
     snap.metrics.frag_size_distr(data)
     snap.metrics.tsse(data, snap.genome.hg38)
 
@@ -52,7 +52,7 @@ def pipeline(data):
 
     snap.pp.make_gene_matrix(data, gene_anno=snap.genome.hg38)
 
-    snap.ex.export_coverage(data, groupby="leiden")
+    snap.ex.export_coverage(data, groupby="leiden", out_dir=tmp_path)
 
 def test_backed(tmp_path):
     fragment_file = snap.datasets.pbmc500(downsample=True)
@@ -63,9 +63,9 @@ def test_backed(tmp_path):
         file=h5ad(tmp_path),
         sorted_by_barcode=False,
     )
-    pipeline(data)
+    pipeline(data, tmp_path)
 
-def test_in_memory():
+def test_in_memory(tmp_path):
     fragment_file = snap.datasets.pbmc500(downsample=True)
 
     data = snap.pp.import_fragments(
@@ -73,4 +73,4 @@ def test_in_memory():
         chrom_sizes=snap.genome.hg38,
         sorted_by_barcode=False,
     )
-    pipeline(data)
+    pipeline(data, tmp_path)
