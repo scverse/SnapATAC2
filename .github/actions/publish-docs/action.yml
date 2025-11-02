@@ -2,46 +2,17 @@ name: 'Build docs'
 description: 'Build documentation'
 
 inputs:
-  python-version:
-    required: false
-    default: "3.12"
+  type:
+    required: true,
+  version:
+    required: true,
 
 runs:
   using: "composite"
   steps:
-  - name: Install dependency
-    shell: bash
-    run: |
-      sudo apt-get install -y pandoc jq
-      pip install --user sphinx==8.* pydata-sphinx-theme==0.16.* pandoc nbsphinx \
-        Pygments==2.18.* sphinx-autodoc-typehints myst-parser \
-        markupsafe==3.* sphinx-plotly-directive
-
-  - name: Build doc
-    shell: bash
-    run: sphinx-build ${GITHUB_WORKSPACE}/docs _build/html
-
-  - name: Get SnapATAC2 version
-    id: get_version
-    shell: bash
-    run: |
-      VERSION_NUMBER=$(python -c "import snapatac2;print('.'.join(snapatac2.__version__.split('.')[:2]))")
-      echo $VERSION_NUMBER
-      echo "VERSION=$VERSION_NUMBER" >> $GITHUB_ENV
-      IS_DEV=$(python -c "import snapatac2;print('dev' in snapatac2.__version__)")
-      if [[ $IS_DEV == "True" ]]; then
-        echo "DEPLOYMENT=dev" >> $GITHUB_ENV
-      else
-        echo "DEPLOYMENT=stable" >> $GITHUB_ENV
-      fi
-      echo "============================== Info ================================"
-      echo "DEPLOYMENT=${{ env.DEPLOYMENT }}"
-      echo "VERSION=${{ env.VERSION }}"
-      echo "===================================================================="
-
   - name: Deploy 🚀
     uses: JamesIves/github-pages-deploy-action@v4
-    if: ${{ env.DEPLOYMENT == 'dev' }}
+    if: ${{ inputs.type == 'dev' }}
     with:
       single-commit: true
       branch: gh-pages
@@ -51,13 +22,13 @@ runs:
 
   - name: Deploy (version) 🚀
     uses: JamesIves/github-pages-deploy-action@v4
-    if: ${{ env.DEPLOYMENT == 'stable' }}
+    if: ${{ inputs.type == 'stable' }}
     with:
       single-commit: true
       branch: gh-pages
       folder: _build/html
       clean: true
-      target-folder: /version/${{ env.VERSION }}/
+      target-folder: /version/${{ inputs.version }}/
 
   - name: Fetch JSON and Get Preferred Version
     shell: bash

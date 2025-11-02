@@ -208,17 +208,11 @@ macro_rules! with_anndata {
                 H5::NAME => {
                     $fun!(x.inner_ref::<H5>().deref())
                 }
-                anndata_zarr::Zarr::NAME => {
-                    $fun!(x.inner_ref::<anndata_zarr::Zarr>().deref())
-                }
                 x => panic!("Unsupported backend: {}", x),
             },
             AnnDataLike::AnnDataSet(x) => match x.backend().as_str() {
                 H5::NAME => {
                     $fun!(x.inner_ref::<H5>().deref())
-                }
-                anndata_zarr::Zarr::NAME => {
-                    $fun!(x.inner_ref::<anndata_zarr::Zarr>().deref())
                 }
                 x => panic!("Unsupported backend: {}", x),
             },
