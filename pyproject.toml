@@ -69,6 +69,11 @@ recommend = [
 
 [dependency-groups]
 dev = [
+  {include-group = "test"},
+]
+
+# For scverse/integration-testing
+test = [
   "pytest >=8.1.1,<9",
   "hypothesis >=6.72.4,<7",
 ]
