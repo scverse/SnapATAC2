@@ -6,6 +6,8 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::str::FromStr;
 use anyhow::{Result, Context};
+use std::sync::mpsc::{sync_channel, Receiver};
+use std::thread::JoinHandle;
 
 use bed_utils::bed::{BEDLike, MergeBed, NarrowPeak};
 use bed_utils::extsort::ExternalSorterBuilder;
@@ -114,6 +116,48 @@ fn detect_compression<P: AsRef<Path>>(file: P) -> Option<Compression> {
         }
     } else {
         None
+    }
+}
+
+/// PrefetchIterator allows for prefetching items from an iterator into a buffer.
+pub struct PrefetchIterator<T> {
+    rx: Receiver<T>,
+    // Keep the thread handle so we can join on Drop (nice for deterministic cleanup).
+    handle: Option<JoinHandle<()>>,
+}
+
+impl<T: Send + 'static> PrefetchIterator<T> {
+    pub fn new<I>(iter: I, buffer_size: usize) -> Self
+    where
+        I: IntoIterator<Item = T> + Send + 'static,
+    {
+        let (sender, receiver) = sync_channel(buffer_size);
+        let handle = std::thread::spawn(move || {
+            for item in iter {
+                if sender.send(item).is_err() {
+                    // If the receiver is dropped, we stop sending more items.
+                    break;
+                }
+            }
+        });
+        Self { rx: receiver, handle: Some(handle) }
+    }
+}
+
+impl<T: Send + 'static> Iterator for PrefetchIterator<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.rx.recv().ok()
+    }
+}
+
+impl<T> Drop for PrefetchIterator<T> {
+    fn drop(&mut self) {
+        // Dropping rx will cause the producer to exit; join the thread to avoid detach.
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
     }
 }
 

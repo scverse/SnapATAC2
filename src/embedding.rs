@@ -1,8 +1,10 @@
 use crate::utils::AnnDataLike;
+use snapatac2_core::utils::PrefetchIterator;
 
 use anndata::{
     data::{
-        array::utils::to_csr_data, ArrayConvert, DynCsrMatrix, SelectInfoElem, SelectInfoElemBounds,
+        array::utils::to_csr_data, ArrayConvert, DynCsrMatrix, SelectInfoElem,
+        SelectInfoElemBounds, Stackable,
     },
     AnnDataOp, ArrayData, ArrayElemOp, Backend, Selectable,
 };
@@ -19,7 +21,7 @@ use pyanndata::data::PyArrayData;
 use pyo3::{ffi::c_str, prelude::*};
 use rand::SeedableRng;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
-use std::ops::Deref;
+use std::{collections::HashSet, ops::Deref};
 
 #[pyfunction]
 #[pyo3(signature = (anndata, selected_features, n_components, random_state, feature_weights=None))]
@@ -52,76 +54,6 @@ pub(crate) fn spectral_embedding<'py>(
     }
     let (evals, evecs) = crate::with_anndata!(&anndata, run)?;
 
-    Ok((
-        PyArray1::from_owned_array(py, evals),
-        PyArray2::from_owned_array(py, evecs),
-    ))
-}
-
-#[pyfunction]
-#[pyo3(signature = (anndata, selected_features, n_components, sample_size, weighted_by_degree, chunk_size, feature_weights=None))]
-pub(crate) fn spectral_embedding_nystrom<'py>(
-    py: Python<'py>,
-    anndata: AnnDataLike,
-    selected_features: &Bound<'_, PyAny>,
-    n_components: usize,
-    sample_size: usize,
-    weighted_by_degree: bool,
-    chunk_size: usize,
-    feature_weights: Option<Vec<f64>>,
-) -> Result<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray2<f64>>)> {
-    macro_rules! run {
-        ($data:expr) => {{
-            let selected_features =
-                pyanndata::data::to_select_elem(selected_features, $data.n_vars())?;
-            let weights = if let Some(weights) = feature_weights {
-                weights
-            } else {
-                idf_from_chunks_parallel($data.x().iter(5000).map(|x: (DynCsrMatrix, _, _)| {
-                    let mat: CsrMatrix<f64> = x.0.try_convert().unwrap();
-                    mat.select_axis(1, &selected_features)
-                }))
-            };
-
-            let n_obs = $data.n_obs();
-            let mut rng = rand::rngs::StdRng::seed_from_u64(2023);
-            let idx = if weighted_by_degree {
-                let weights = compute_probs(&compute_degrees($data, &selected_features, &weights));
-                rand::seq::index::sample_weighted(&mut rng, n_obs, |i| weights[i], sample_size)?
-                    .into_vec()
-            } else {
-                rand::seq::index::sample(&mut rng, n_obs, sample_size).into_vec()
-            };
-            let selected_samples = SelectInfoElem::from(idx);
-            let mut seed_mat: CsrMatrix<f64> = $data
-                .x()
-                .slice::<DynCsrMatrix, _>(&[selected_samples, selected_features.clone()])?
-                .unwrap()
-                .try_convert()?;
-
-            // feature weighting and L2 norm normalization.
-            normalize(&mut seed_mat, &weights);
-
-            info!("Compute embeddings for {} landmarks...", sample_size);
-            let (v, mut u, d) = spectral_mf(seed_mat.clone(), n_components, 0)?;
-            info!("Apply Nystrom to out-of-sample data...");
-            nystrom(
-                py,
-                seed_mat,
-                &v,
-                &mut u,
-                &d,
-                $data.x().iter(chunk_size).map(|x: (DynCsrMatrix, _, _)| {
-                    let mut mat: CsrMatrix<f64> = x.0.try_convert().unwrap();
-                    mat = mat.select_axis(1, &selected_features);
-                    normalize(&mut mat, &weights);
-                    mat
-                }),
-            )
-        }};
-    }
-
-    let (evals, evecs) = crate::with_anndata!(&anndata, run)?;
     Ok((
         PyArray1::from_owned_array(py, evals),
         PyArray2::from_owned_array(py, evecs),
@@ -192,6 +124,102 @@ fn spectral_mf(
     Ok((v, u, degree_inv.into_iter().copied().collect()))
 }
 
+#[pyfunction]
+#[pyo3(signature = (anndata, selected_features, n_components, sample_size, weighted_by_degree, chunk_size, feature_weights=None))]
+pub(crate) fn spectral_embedding_nystrom<'py>(
+    py: Python<'py>,
+    anndata: AnnDataLike,
+    selected_features: &Bound<'_, PyAny>,
+    n_components: usize,
+    sample_size: usize,
+    weighted_by_degree: bool,
+    chunk_size: usize,
+    feature_weights: Option<Vec<f64>>,
+) -> Result<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray2<f64>>)> {
+    macro_rules! run {
+        ($data:expr) => {{
+            // Get feature indices
+            let selected_features =
+                pyanndata::data::to_select_elem(selected_features, $data.n_vars())?;
+
+            // Get sample indices
+            let n_obs = $data.n_obs();
+            let mut rng = rand::rngs::StdRng::seed_from_u64(2023);
+            let idx = if weighted_by_degree {
+                todo!()
+                /*
+                let weights = compute_probs(&compute_degrees($data, &selected_features, &weights));
+                rand::seq::index::sample_weighted(&mut rng, n_obs, |i| weights[i], sample_size)?
+                    .into_vec()
+                */
+            } else {
+                rand::seq::index::sample(&mut rng, n_obs, sample_size).into_vec()
+            };
+            let selected_samples: HashSet<usize> = idx.into_iter().collect();
+
+            let style = ProgressStyle::with_template(
+                "[{elapsed}] {bar:40.cyan/blue} {pos:>7}/{len:7} (eta: {eta})",
+            )
+            .unwrap();
+            info!("Compute IDF and extract submatrix...");
+            // Extract submatrix and compute idf
+            let feat = selected_features.clone();
+            let (mut seed_mat, idf): (CsrMatrix<f64>, Vec<f64>) = get_submatrix_and_idf(
+                PrefetchIterator::new(
+                    $data
+                        .x()
+                        .iter::<DynCsrMatrix>(5000)
+                        .map(move |(x, i, j)| {
+                            let mat: CsrMatrix<f64> = x.try_convert().unwrap();
+                            (mat.select_axis(1, &feat), i, j)
+                        })
+                        .progress_with_style(style.clone()),
+                    1,
+                ),
+                selected_samples,
+            )?;
+            let weights = if let Some(weights) = feature_weights {
+                weights
+            } else {
+                idf
+            };
+
+            // feature weighting and L2 norm normalization.
+            normalize(&mut seed_mat, &weights);
+
+            info!("Compute embeddings for {} landmarks...", sample_size);
+            let (v, mut u, d) = spectral_mf(seed_mat.clone(), n_components, 0)?;
+            info!("Apply Nystrom to out-of-sample data...");
+            nystrom(
+                py,
+                seed_mat,
+                &v,
+                &mut u,
+                &d,
+                PrefetchIterator::new(
+                    $data
+                        .x()
+                        .iter(chunk_size)
+                        .map(move |x: (DynCsrMatrix, _, _)| {
+                            let mut mat: CsrMatrix<f64> = x.0.try_convert().unwrap();
+                            mat = mat.select_axis(1, &selected_features);
+                            normalize(&mut mat, &weights);
+                            mat
+                        })
+                        .progress_with_style(style),
+                    1,
+                ),
+            )
+        }};
+    }
+
+    let (evals, evecs) = crate::with_anndata!(&anndata, run)?;
+    Ok((
+        PyArray1::from_owned_array(py, evals),
+        PyArray2::from_owned_array(py, evecs),
+    ))
+}
+
 /// The input is assumed to be a csr matrix with rows normalized to unit L2 norm.
 fn nystrom<'py, I>(
     py: Python<'py>,
@@ -203,7 +231,6 @@ fn nystrom<'py, I>(
 ) -> Result<(Array1<f64>, Array2<f64>)>
 where
     I: IntoIterator<Item = CsrMatrix<f64>>,
-    I::IntoIter: ExactSizeIterator,
 {
     // normalize the eigenvectors by degrees.
     evecs
@@ -221,24 +248,22 @@ where
 
     let nystrom_py: Py<PyAny> = PyModule::from_code(
         py,
-        c_str!("def nystrom(seed, sample, evecs, evals):
+        c_str!(
+            "def nystrom(seed, sample, evecs, evals):
             import numpy as np
             q = sample @ (seed.T @ evecs)
             t = q.sum(axis=0) * evals
             d = q @ t.reshape((-1, 1))
             d[d<=0] = np.min(d[d>0])
             np.divide(q, np.sqrt(d), out=q)
-            return q"),
+            return q"
+        ),
         c_str!(""),
         c_str!(""),
     )?
     .getattr("nystrom")?
     .into();
 
-    let style = ProgressStyle::with_template(
-        "[{elapsed}] {bar:40.cyan/blue} {pos:>7}/{len:7} (eta: {eta})",
-    )
-    .unwrap();
     let output: Vec<f64> = inputs
         .into_iter()
         .map(|sample| {
@@ -256,7 +281,6 @@ where
                 .to_vec()
                 .unwrap()
         })
-        .progress_with_style(style)
         .flatten()
         .collect();
 
@@ -313,46 +337,43 @@ where
     }
 }
 
-// idf_from_chunks that parallelizes the counting step
-fn idf_from_chunks_parallel<I>(input: I) -> Vec<f64>
+/// Extract submatrix given row and column indices from an iterator of matrices.
+/// Also compute idf from the matrices.
+fn get_submatrix_and_idf<I>(
+    mat_iter: I,
+    row_indices: HashSet<usize>,
+) -> Result<(CsrMatrix<f64>, Vec<f64>)>
 where
-    I: IntoIterator<Item = CsrMatrix<f64>>,
+    I: IntoIterator<Item = (CsrMatrix<f64>, usize, usize)>,
 {
     let mut idf: Option<Vec<f64>> = None;
     let mut n = 0.0;
-    for mat in input {
+    let mut update_idf = |mat: &CsrMatrix<f64>| {
         let ncols = mat.ncols();
         if idf.is_none() {
             idf = Some(vec![0.0; ncols]);
         }
-        let local: Vec<f64> = mat
-            .row_iter()
-            .par_bridge()
-            .map(|row| {
-                let mut local = vec![0.0; ncols];
-                for i in row.col_indices() {
-                    local[*i] += 1.0;
-                }
-                local
-            })
-            .reduce(
-                || vec![0.0; ncols],
-                |mut a, b| {
-                    for (x, y) in a.iter_mut().zip(b) {
-                        *x += y;
-                    }
-                    a
-                },
-            );
-        if let Some(ref mut idf_vec) = idf {
-            for (x, y) in idf_vec.iter_mut().zip(local) {
-                *x += y;
-            }
-        }
+
         n += mat.nrows() as f64;
-    }
+        mat.col_indices()
+            .iter()
+            .for_each(|i| idf.as_mut().unwrap()[*i] += 1.0);
+    };
+
+    let mat = {
+        let results = mat_iter.into_iter().map(|(m, i, j)| {
+            update_idf(&m);
+            let row_idx = (i..j)
+                .filter(|x| row_indices.contains(x))
+                .map(|x| x - i)
+                .collect::<Vec<_>>();
+            m.select_axis(0, SelectInfoElem::from(row_idx))
+        });
+        Stackable::vstack(results)?
+    };
+
     let idf = idf.unwrap_or_default();
-    if idf.iter().all_equal() {
+    let idf = if idf.iter().all_equal() {
         vec![1.0; idf.len()]
     } else {
         idf.into_iter()
@@ -365,7 +386,8 @@ where
                 (n / x).ln()
             })
             .collect()
-    }
+    };
+    Ok((mat, idf))
 }
 
 /// feature weighting and L2 norm normalization.
@@ -512,9 +534,11 @@ fn frobenius_norm(x: &CsrMatrix<f64>) -> f64 {
     let sum: f64 = Python::with_gil(|py| {
         let fun: Py<PyAny> = PyModule::from_code(
             py,
-            c_str!("def f(X):
+            c_str!(
+                "def f(X):
                 import numpy as np
-                return np.power(X @ X.T, 2).sum()"),
+                return np.power(X @ X.T, 2).sum()"
+            ),
             c_str!(""),
             c_str!(""),
         )?
