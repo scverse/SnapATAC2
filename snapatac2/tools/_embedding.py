@@ -133,11 +133,12 @@ def spectral(
     random_state: int = 0,
     sample_size: int | float | None = None,
     sample_method: Literal["random", "degree"] = "random",
-    chunk_size: int = 20000,
+    chunk_size: int = 5000,
     distance_metric: Literal["jaccard", "cosine"] = "cosine",
     weighted_by_sd: bool = True,
     feature_weights: list[float] | None = None,
     inplace: bool = True,
+    num_threads: int = 32,
 ) -> tuple[np.ndarray, np.ndarray] | None:
     """
     Perform dimension reduction using Laplacian Eigenmaps.
@@ -195,7 +196,8 @@ def spectral(
         the full matrix is used. Using this only when the number of cells is too large, e.g. > 10,000,000, or
         the `distance_metric` is "jaccard".
     chunk_size
-        Chunk size used in the Nystrom method
+        Chunk size used in the Nystrom method. The effective chunk size is
+        `chunk_size` x `num_threads`. This parameter should not be too small, e.g., <1000.
     distance_metric
         distance metric: "jaccard", "cosine".
         When "cosine" is used, the matrix-free spectral embedding algorithm is used.
@@ -208,6 +210,8 @@ def spectral(
         frequency (IDF) is used.
     inplace
         Whether to store the result in the anndata object.
+    num_threads
+        Number of threads to use in the Nystrom method.
 
     Returns
     -------
@@ -261,7 +265,7 @@ def spectral(
                 weighted_by_degree = False
             else:
                 weighted_by_degree = True
-            v, u = internal.spectral_embedding_nystrom(adata, features, n_comps, sample_size, weighted_by_degree, chunk_size)
+            v, u = internal.spectral_embedding_nystrom(adata, features, n_comps, sample_size, weighted_by_degree, chunk_size, None, num_threads)
             evals, evecs = orthogonalize(v, u)
         else:
             if feature_weights is None:
@@ -395,7 +399,7 @@ class Spectral:
         return (self.evals, self.evecs)
 
 def orthogonalize(evals, evecs):
-    _, sigma, Vt = np.linalg.svd(evecs)
+    _, sigma, Vt = np.linalg.svd(evecs, full_matrices=False)
     V = Vt.T
 
     B = np.multiply(V.T, evals.reshape((1,-1))) @ V
