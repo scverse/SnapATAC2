@@ -7,58 +7,10 @@ import gc
 import logging
 import math
 
-from snapatac2._utils import get_igraph_from_adjacency, is_anndata 
+from snapatac2._utils import is_anndata 
 import snapatac2._snapatac2 as internal
 
-__all__ = ['umap2', 'umap', 'spectral', 'multi_spectral']
-
-def umap2(
-    adata: internal.AnnData | internal.AnnDataSet | np.ndarray,
-    n_comps: int = 2,
-    key_added: str = 'umap',
-    random_state: int = 0,
-    inplace: bool = True,
-) -> np.ndarray | None:
-    """
-    Parameters
-    ----------
-    adata
-        The annotated data matrix.
-    n_comps
-        The number of dimensions of the embedding.
-    key_added
-        `adata.obs` key under which to add the cluster labels.
-    random_state
-        Random seed.
-    inplace
-        Whether to store the result in the anndata object.
-    
-    Returns
-    -------
-    np.ndarray | None
-        if `inplace=True` it stores UMAP embedding in
-        `adata.obsm["X_`key_added`"]`.
-        Otherwise, it returns the result as a numpy array.
-    """
-    from igraph import set_random_number_generator
-    import random
-    random.seed(random_state)
-    set_random_number_generator(random)
-
-    if is_anndata(adata):
-        adjacency = adata.obsp["distances"]
-    else:
-        inplace = False
-        adjacency = adata
-    gr = get_igraph_from_adjacency(adjacency)
-    dist = np.array(gr.es["weight"])
-    umap = gr.layout_umap(dist=dist, dim=n_comps, min_dist=0.1, epochs=500)
-    umap = np.array(umap.coords)
-
-    if inplace:
-        adata.obsm["X_" + key_added] = umap
-    else:
-        return umap
+__all__ = ['umap', 'spectral', 'multi_spectral']
 
 def umap(
     adata: internal.AnnData | internal.AnnDataSet | np.ndarray,
@@ -434,55 +386,6 @@ class JaccardNormalizer:
         if clip_min is not None or clip_max is not None:
             np.clip(jm, a_min=clip_min, a_max=clip_max, out=jm)
         gc.collect()
-
-class SpectralMatrixFree:
-    """Matrix-free spectral embedding without computing the similarity matrix explicitly.
-
-    Only cosine similarity is supported.
-    """
-    def __init__(
-        self,
-        out_dim: int = 30,
-        feature_weights = None,
-    ):
-        self.out_dim = out_dim
-        self.feature_weights = feature_weights
-
-    def fit(self, mat, verbose: int = 1):
-        if self.feature_weights is not None:
-            mat = mat @ sp.sparse.diags(self.feature_weights)
-        self.sample = mat
-        self.in_dim = mat.shape[1]
-
-        s = 1 / np.sqrt(np.ravel(sp.sparse.csr_matrix.power(mat, 2).sum(axis = 1)))
-        X = sp.sparse.diags(s) @ mat
-
-        D = np.ravel(X @ X.sum(axis = 0).T) - 1
-        X = sp.sparse.diags(1 / np.sqrt(D)) @ X
-        evals, evecs = _eigen(X, 1 / D, k=self.out_dim)
-
-        ix = evals.argsort()[::-1]
-        self.evals = evals[ix]
-        self.evecs = evecs[:, ix]
-
-        self.Q = []
-        return self
-
-    def extend(self, data):
-        raise NotImplementedError
-
-    def transform(self, orthogonalize = True):
-        if len(self.Q) > 0:
-            raise NotImplementedError
-        return (self.evals, self.evecs)
-
-def _eigen(X, D, k):
-    def f(v):
-        return X @ (v.T @ X).T - D * v
-
-    n = X.shape[0]
-    A = sp.sparse.linalg.LinearOperator((n, n), matvec=f, dtype=np.float64)
-    return sp.sparse.linalg.eigsh(A, k=k)
 
 def multi_spectral(
     adatas: list[internal.AnnData] | list[internal.AnnDataSet], 

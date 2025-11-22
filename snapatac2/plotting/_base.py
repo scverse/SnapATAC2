@@ -272,7 +272,7 @@ def render_plot(
 
     # save figure to file
     if out_file is not None:
-        if out_file.endswith(".html"):
+        if str(out_file).endswith(".html"):
             fig.write_html(out_file, include_plotlyjs="cdn")
         else:
             fig.write_image(out_file, scale=scale)
