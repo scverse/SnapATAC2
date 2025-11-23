@@ -5,9 +5,9 @@
 ### Features:
 
   - Support python 3.13 and 3.14.
-  - Add Zarr backend support for AnnData.
   - Improve the precision of p values in `tl.motif_enrichment`.
   - Add `pl.coverage` for quick visualization of signal coverage.
+  - Add `tl.leiden_sweep` for optimizing the resolution parameter in Leiden clustering.
 
 ### Breaking Changes:
 
