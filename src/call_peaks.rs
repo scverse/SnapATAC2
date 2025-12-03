@@ -44,11 +44,14 @@ pub fn py_merge_peaks<'py>(
             Ok((key, ps))
         })
         .collect::<Result<_>>()?;
-    if normalize{
-        for (_, peaks) in peak_list.iter_mut() {
-            *peaks = score_per_million(peaks.clone())?;
-        }
-    }
+    let peak_list = if normalize {
+        peak_list
+            .into_iter()
+            .map(|(key, peaks)| Ok((key, score_per_million(peaks)?)))
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        peak_list
+    };
     let chrom_sizes = chrom_sizes.into_iter().collect();
     let peaks: Vec<_> = merge_peaks(peak_list.iter().flat_map(|x| x.1.clone()), half_width)
         .flatten()

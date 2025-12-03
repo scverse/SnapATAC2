@@ -54,7 +54,7 @@ pub fn clip_peak(mut peak: NarrowPeak, chrom_sizes: &crate::genome::ChromSizes) 
     peak
 }
 
-fn score_per_million(mut peaks: Vec<NarrowPeak>) -> Result<Vec<NarrowPeak>> {
+pub fn score_per_million(mut peaks: Vec<NarrowPeak>) -> Result<Vec<NarrowPeak>> {
 
     let total_signal: f64 = peaks.iter().filter_map(|p| p.p_value).sum();
 
