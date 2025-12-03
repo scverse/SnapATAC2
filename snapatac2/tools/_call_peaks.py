@@ -219,6 +219,8 @@ def merge_peaks(
         chromosome sizes will be obtained from the genome.
     half_width
         Half width of the merged peaks.
+    normalize
+        Score per million normalization. Maybe useful when sequencing depth varies, DOI: 10.1126/science.aav1898.
 
     Returns
     -------

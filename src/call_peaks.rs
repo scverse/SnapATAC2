@@ -9,7 +9,7 @@ use pyo3::ffi::c_str;
 use snapatac2_core::utils::{self, Compression};
 use snapatac2_core::{
     preprocessing::Fragment,
-    utils::{clip_peak, merge_peaks, open_file_for_write},
+    utils::{clip_peak, merge_peaks, open_file_for_write,score_per_million},
     SnapData,
 };
 
