@@ -194,6 +194,7 @@ def merge_peaks(
     peaks: dict[str, 'polars.DataFrame'],
     chrom_sizes: dict[str, int] | Genome,
     half_width: int = 250,
+    normalize: bool = False,
 ) -> 'polars.DataFrame':
     """Merge peaks from different groups.
 
@@ -232,7 +233,7 @@ def merge_peaks(
     import polars as pl
     chrom_sizes = chrom_sizes.chrom_sizes if isinstance(chrom_sizes, Genome) else chrom_sizes
     peaks = { k: pl.from_pandas(v) if isinstance(v, pd.DataFrame) else v for k, v in peaks.items()}
-    return _snapatac2.py_merge_peaks(peaks, chrom_sizes, half_width)
+    return _snapatac2.py_merge_peaks(peaks, chrom_sizes, half_width, normalize)
 
 def _par_map(mapper, args, nprocs):
     import time

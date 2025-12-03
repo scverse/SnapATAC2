@@ -35,6 +35,7 @@ pub fn py_merge_peaks<'py>(
     peaks: HashMap<String, PyDataFrame>,
     chrom_sizes: HashMap<String, u64>,
     half_width: u64,
+    normalize: bool,
 ) -> Result<PyDataFrame> {
     let peak_list: Vec<_> = peaks
         .into_iter()
@@ -43,7 +44,11 @@ pub fn py_merge_peaks<'py>(
             Ok((key, ps))
         })
         .collect::<Result<_>>()?;
-
+    if normalize{
+        for (_, peaks) in peak_list.iter_mut() {
+            *peaks = score_per_million(peaks.clone())?;
+        }
+    }
     let chrom_sizes = chrom_sizes.into_iter().collect();
     let peaks: Vec<_> = merge_peaks(peak_list.iter().flat_map(|x| x.1.clone()), half_width)
         .flatten()
