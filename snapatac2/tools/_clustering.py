@@ -4,18 +4,18 @@ from typing import Literal
 import scipy.sparse as ss
 import numpy as np
 
+import snapatac2
 import snapatac2._snapatac2 as internal
 from snapatac2._utils import get_igraph_from_adjacency, is_anndata
 
 def leiden(
     adata: internal.AnnData | internal.AnnDataSet | ss.spmatrix,
     resolution: float = 1,
-    objective_function: Literal["CPM", "modularity", "RBConfiguration"] = "modularity",
+    objective_function: Literal["CPM", "modularity"] = "modularity",
     min_cluster_size: int = 5,
     n_iterations: int = -1,
     random_state: int = 0,
     key_added: str = "leiden",
-    use_leidenalg: bool = False,
     weighted: bool = False,
     inplace: bool = True,
 ) -> np.ndarray | None:
@@ -39,7 +39,7 @@ def leiden(
         to one that doesn't accept a `resolution_parameter`.
     objective_function
         whether to use the Constant Potts Model (CPM) or modularity.
-        Must be either "CPM", "modularity" or "RBConfiguration".
+        Must be either "CPM" or "modularity".
     min_cluster_size
         The minimum size of clusters.
     n_iterations
@@ -50,8 +50,6 @@ def leiden(
         Change the initialization of the optimization.
     key_added
         `adata.obs` key under which to add the cluster labels.
-    use_leidenalg
-        If `True`, `leidenalg` package is used. Otherwise, `python-igraph` is used.
     weighted
         Whether to use the edge weights in the graph
     inplace
@@ -64,8 +62,13 @@ def leiden(
         dim (number of samples) that stores the subgroup id
         (`'0'`, `'1'`, ...) for each cell. Otherwise, returns the array directly.
     """
+    from igraph import set_random_number_generator
     from collections import Counter
     import polars
+    import random
+
+    random.seed(random_state)
+    set_random_number_generator(random)
 
     if is_anndata(adata):
         adjacency = adata.obsp["distances"]
@@ -81,43 +84,14 @@ def leiden(
     else:
         weights = None
 
-    if use_leidenalg or objective_function == "RBConfiguration":
-        import leidenalg
-        from leidenalg.VertexPartition import MutableVertexPartition
-
-        if objective_function == "modularity":
-            partition_type = leidenalg.ModularityVertexPartition
-        elif objective_function == "CPM":
-            partition_type = leidenalg.CPMVertexPartition
-        elif objective_function == "RBConfiguration":
-            partition_type = leidenalg.RBConfigurationVertexPartition
-        else:
-            raise ValueError("objective function is not supported: " + partition_type)
-
-        partition = leidenalg.find_partition(
-            gr,
-            partition_type,
-            n_iterations=n_iterations,
-            seed=random_state,
-            resolution_parameter=resolution,
-            weights=weights,
-        )
-    else:
-        from igraph import set_random_number_generator
-        import random
-
-        random.seed(random_state)
-        set_random_number_generator(random)
-        partition = gr.community_leiden(
-            objective_function=objective_function,
-            weights=weights,
-            resolution=resolution,
-            beta=0.01,
-            initial_membership=None,
-            n_iterations=n_iterations,
-        )
-
-    groups = partition.membership
+    groups = gr.community_leiden(
+        objective_function=objective_function,
+        weights=weights,
+        resolution=resolution,
+        beta=0.01,
+        initial_membership=None,
+        n_iterations=n_iterations,
+    ).membership
 
     new_cl_id = dict(
         [
@@ -134,13 +108,6 @@ def leiden(
             groups,
             dtype=polars.datatypes.Categorical,
         )
-        # store information on the clustering parameters
-        # adata.uns['leiden'] = {}
-        # adata.uns['leiden']['params'] = dict(
-        #    resolution=resolution,
-        #    random_state=random_state,
-        #    n_iterations=n_iterations,
-        # )
     else:
         return groups
 
@@ -148,7 +115,7 @@ def leiden(
 def leiden_sweep(
     adata: internal.AnnData | internal.AnnDataSet | ss.spmatrix,
     resolutions: list[float],
-    use_rep: str = "X_spectral",
+    use_rep: str | np.ndarray = "X_spectral",
     objective_function: Literal["CPM", "modularity", "RBConfiguration"] = "modularity",
     min_cluster_size: int = 5,
     n_iterations: int = -1,
@@ -192,8 +159,12 @@ def leiden_sweep(
     from sklearn.metrics import silhouette_score
     from multiprocess import get_context
 
-    mat = adata.obsm[use_rep]
-    distances = adata.obsp["distances"]
+    if is_anndata(adata):
+        distances = adata.obsp["distances"]
+        mat = adata.obsm[use_rep]
+    else:
+        mat = use_rep
+        distances = adata
 
     def _func(resolution):
         groups = leiden(
@@ -206,16 +177,19 @@ def leiden_sweep(
             weighted=weighted,
             inplace=False,
         )
-        score = silhouette_score(
-            mat,
-            groups,
-            sample_size=20000,
-        )
+        if len(set(groups)) > 1:
+            score = silhouette_score(
+                mat,
+                groups,
+                sample_size=20000,
+            )
+        else:
+            score = 0
         return  {
-                "resolution": resolution,
-                "n_clusters": len(set(groups)),
-                "silhouette_score": score,
-            }
+            "resolution": resolution,
+            "n_clusters": len(set(groups)),
+            "silhouette_score": score,
+        }
 
     with get_context("spawn").Pool(n_jobs) as p:
         return list(p.imap(_func, resolutions))

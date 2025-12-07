@@ -275,7 +275,7 @@ impl Nystrom {
         (0..num_threads)
             .into_par_iter()
             .map(|i| {
-                let start = i * chunk_size;
+                let start = (i * chunk_size).min(nrows);
                 let end = ((i + 1) * chunk_size).min(nrows);
                 let mut qmat = spmm_dense(start, end, &mat, &self.qmat);
                 let mut q_sum = qmat.row_sum_tr();
@@ -429,7 +429,7 @@ fn normalize(input: &mut CsrMatrix<f64>, feature_weights: &[f64]) {
 }
 
 fn spmm_dense(i: usize, j: usize, mat: &CsrMatrix<f64>, dense: &DMatrix<f64>) -> DMatrix<f64> {
-    assert!(i < j);
+    assert!(i <= j, "Invalid row range, {}-{}", i, j);
     let mut result = DMatrix::zeros(j - i, dense.ncols());
     for row_idx in i..j {
         let row = mat.row(row_idx);
