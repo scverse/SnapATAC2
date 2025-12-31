@@ -240,7 +240,7 @@ def regions(
 
     trace = go.Heatmap(
         x=count.columns,
-        y=peaks[::-1],
+        y=peaks,
         z=mat,
         type='heatmap',
         colorscale='Viridis',
