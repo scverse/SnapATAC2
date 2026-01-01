@@ -17,6 +17,7 @@
 ### Bugs fixed:
 
   - Fix single-ended reads export in `ex.export_fragments`.
+  - Fix extra memory allocation of Nyström method in `tl.spectral`.
   - Various minor bug fixes related to python AnnData conversion.
   - Fix #408.
 
