@@ -54,6 +54,24 @@ pub fn clip_peak(mut peak: NarrowPeak, chrom_sizes: &crate::genome::ChromSizes) 
     peak
 }
 
+pub fn score_per_million(mut peaks: Vec<NarrowPeak>) -> Result<Vec<NarrowPeak>> {
+
+    let total_signal: f64 = peaks.iter().filter_map(|p| p.p_value).sum();
+
+    if total_signal == 0.0 {
+        // Prevent division by zero; just return peaks as-is.
+        return Ok(peaks);
+    }
+    let factor = 1_000_000.0 / total_signal;
+    for peak in &mut peaks {
+        if let Some(score) = peak.p_value.as_mut() {
+            *score *= factor;
+        }
+    }
+
+    Ok(peaks)
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum Compression {
     Gzip,

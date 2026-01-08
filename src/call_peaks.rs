@@ -9,7 +9,7 @@ use pyo3::ffi::c_str;
 use snapatac2_core::utils::{self, Compression};
 use snapatac2_core::{
     preprocessing::Fragment,
-    utils::{clip_peak, merge_peaks, open_file_for_write},
+    utils::{clip_peak, merge_peaks, open_file_for_write,score_per_million},
     SnapData,
 };
 
@@ -35,6 +35,7 @@ pub fn py_merge_peaks<'py>(
     peaks: HashMap<String, PyDataFrame>,
     chrom_sizes: HashMap<String, u64>,
     half_width: u64,
+    normalize: bool,
 ) -> Result<PyDataFrame> {
     let peak_list: Vec<_> = peaks
         .into_iter()
@@ -43,7 +44,14 @@ pub fn py_merge_peaks<'py>(
             Ok((key, ps))
         })
         .collect::<Result<_>>()?;
-
+    let peak_list = if normalize {
+        peak_list
+            .into_iter()
+            .map(|(key, peaks)| Ok((key, score_per_million(peaks)?)))
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        peak_list
+    };
     let chrom_sizes = chrom_sizes.into_iter().collect();
     let peaks: Vec<_> = merge_peaks(peak_list.iter().flat_map(|x| x.1.clone()), half_width)
         .flatten()
