@@ -70,7 +70,6 @@ fn spectral_mf(
     n_components: usize,
     random_state: i64,
 ) -> Result<(Array1<f64>, Array2<f64>, Array1<f64>)> {
-    // Compute degrees.
     let mut col_sum = vec![0.0; input.ncols()];
     input
         .col_indices()

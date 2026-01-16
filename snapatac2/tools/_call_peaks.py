@@ -6,6 +6,7 @@ import snapatac2._snapatac2 as _snapatac2
 import logging
 from snapatac2.genome import Genome
 
+
 def macs3(
     adata: AnnData | AnnDataSet,
     *,
@@ -22,12 +23,12 @@ def macs3(
     extsize: int = 200,
     min_len: int | None = None,
     blacklist: Path | None = None,
-    key_added: str = 'macs3',
+    key_added: str = "macs3",
     tempdir: Path | None = None,
     inplace: bool = True,
     n_jobs: int = 8,
-) -> dict[str, 'polars.DataFrame'] | None:
-    """ Call peaks using MACS3.
+) -> dict[str, "polars.DataFrame"] | None:
+    """Call peaks using MACS3.
 
     Parameters
     ----------
@@ -61,7 +62,7 @@ def macs3(
     max_frag_size
         Maximum fragment size. If provided, fragments with sizes larger than
         `max_frag_size` will be not be used in peak calling.
-        This is used in ATAC-seq data to remove fragments that are not 
+        This is used in ATAC-seq data to remove fragments that are not
         from nucleosome-free regions.
         You can use :func:`~snapatac2.pl.frag_size_distr` to choose a proper value for
         this parameter.
@@ -109,15 +110,15 @@ def macs3(
         replicate = list(adata.obs[replicate])
 
     # MACS3 options
-    options = type('MACS3_OPT', (), {})()
+    options = type("MACS3_OPT", (), {})()
     options.info = lambda _: None
     options.debug = lambda _: None
     options.warn = logging.warn
     options.name = "MACS3"
-    options.bdg_treat = 't'
-    options.bdg_control = 'c'
+    options.bdg_treat = "t"
+    options.bdg_control = "c"
     options.cutoff_analysis = False
-    options.cutoff_analysis_file = 'a'
+    options.cutoff_analysis_file = "a"
     options.store_bdg = False
     options.do_SPMR = False
     options.trackline = False
@@ -125,8 +126,12 @@ def macs3(
     options.log_qvalue = log(qvalue, 10) * -1
     options.PE_MODE = False
 
-    options.gsize = adata.uns['reference_sequences']['reference_seq_length'].sum()    # Estimated genome size
-    options.maxgap = 30    # The maximum allowed gap between two nearby regions to be merged
+    options.gsize = adata.uns["reference_sequences"][
+        "reference_seq_length"
+    ].sum()  # Estimated genome size
+    options.maxgap = (
+        30  # The maximum allowed gap between two nearby regions to be merged
+    )
     options.minlen = extsize if min_len is None else min_len
     options.shift = shift
     options.nolambda = nolambda
@@ -144,24 +149,38 @@ def macs3(
     if groupby is None:
         peaks = _snapatac2.call_peaks_bulk(adata, options, max_frag_size)
         if inplace:
-            adata.uns[key_added + "_pseudobulk"] = peaks.to_pandas() if not adata.isbacked else peaks
+            adata.uns[key_added + "_pseudobulk"] = (
+                peaks.to_pandas() if not adata.isbacked else peaks
+            )
             return
         else:
             return peaks
 
     with tempfile.TemporaryDirectory(dir=tempdir) as tmpdirname:
         logging.info("Exporting fragments...")
-        fragments = _snapatac2.export_tags(adata, tmpdirname, groupby, replicate, max_frag_size, selections)
+        group_names = list(set(groupby))
+        group_idx = {g: str(i) for i, g in enumerate(group_names)}
+        fragments = _snapatac2.export_tags(
+            adata,
+            tmpdirname,
+            [group_idx[x] for x in groupby],
+            replicate,
+            max_frag_size,
+            selections,
+        )
 
         def _call_peaks(tags):
             import tempfile
+
             tempfile.tempdir = tmpdirname  # Overwrite the default tempdir in MACS3
             merged, reps = _snapatac2.create_fwtrack_obj(tags)
             options.log_qvalue = log(qvalue, 10) * -1
-            logging.getLogger().setLevel(logging.CRITICAL + 1) # temporarily disable logging
+            logging.getLogger().setLevel(
+                logging.CRITICAL + 1
+            )  # temporarily disable logging
             peakdetect = PeakDetect(treat=merged, opt=options)
             peakdetect.call_peaks()
-            peakdetect.peaks.filter_fc(fc_low = options.fecutoff)
+            peakdetect.peaks.filter_fc(fc_low=options.fecutoff)
             merged = peakdetect.peaks
 
             others = []
@@ -170,10 +189,10 @@ def macs3(
             for x in reps:
                 peakdetect = PeakDetect(treat=x, opt=options)
                 peakdetect.call_peaks()
-                peakdetect.peaks.filter_fc(fc_low = options.fecutoff)
+                peakdetect.peaks.filter_fc(fc_low=options.fecutoff)
                 others.append(peakdetect.peaks)
-            
-            logging.getLogger().setLevel(logging.INFO) # enable logging
+
+            logging.getLogger().setLevel(logging.INFO)  # enable logging
             return _snapatac2.find_reproducible_peaks(merged, others, blacklist)
 
         logging.info("Calling peaks...")
@@ -181,7 +200,7 @@ def macs3(
             peaks = [_call_peaks(x) for x in fragments.values()]
         else:
             peaks = _par_map(_call_peaks, [(x,) for x in fragments.values()], n_jobs)
-        peaks = {k: v for k, v in zip(fragments.keys(), peaks)}
+        peaks = {group_names[int(k)]: v for k, v in zip(fragments.keys(), peaks)}
         if inplace:
             if adata.isbacked:
                 adata.uns[key_added] = peaks
@@ -190,11 +209,12 @@ def macs3(
         else:
             return peaks
 
+
 def merge_peaks(
-    peaks: dict[str, 'polars.DataFrame'],
+    peaks: dict[str, "polars.DataFrame"],
     chrom_sizes: dict[str, int] | Genome,
     half_width: int = 250,
-) -> 'polars.DataFrame':
+) -> "polars.DataFrame":
     """Merge peaks from different groups.
 
     Merge peaks from different groups. It is typically used to merge
@@ -230,9 +250,16 @@ def merge_peaks(
     """
     import pandas as pd
     import polars as pl
-    chrom_sizes = chrom_sizes.chrom_sizes if isinstance(chrom_sizes, Genome) else chrom_sizes
-    peaks = { k: pl.from_pandas(v) if isinstance(v, pd.DataFrame) else v for k, v in peaks.items()}
+
+    chrom_sizes = (
+        chrom_sizes.chrom_sizes if isinstance(chrom_sizes, Genome) else chrom_sizes
+    )
+    peaks = {
+        k: pl.from_pandas(v) if isinstance(v, pd.DataFrame) else v
+        for k, v in peaks.items()
+    }
     return _snapatac2.py_merge_peaks(peaks, chrom_sizes, half_width)
+
 
 def _par_map(mapper, args, nprocs):
     import time
@@ -257,4 +284,4 @@ def _par_map(mapper, args, nprocs):
                         remaining.append((i, job))
                 jobs = remaining
                 time.sleep(0.5)
-        return [x for _,x in sorted(results, key=lambda x: x[0])]
+        return [x for _, x in sorted(results, key=lambda x: x[0])]
