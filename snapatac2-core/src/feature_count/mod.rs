@@ -5,12 +5,11 @@ mod data_iter;
 use std::str::FromStr;
 
 use anyhow::{bail, Context, Result};
-use anndata::{data::DynCsrMatrix, AnnData, AnnDataOp, AnnDataSet, ArrayElemOp, AxisArraysOp, Backend, ElemCollectionOp};
+use anndata::{AnnData, AnnDataOp, AnnDataSet, ArrayElemOp, AxisArraysOp, Backend, ElemCollectionOp, data::DynCsrMatrix};
 use bed_utils::bed::GenomicRange;
 pub use data_iter::{ValueType, BaseValue, ChromValueIter, BaseData, FragmentData, ContactData, CompressedFragmentIter};
 pub use counter::{FeatureCounter, CountingStrategy};
 pub use matrix::{create_gene_matrix, create_tile_matrix, create_peak_matrix};
-use nalgebra_sparse::CsrMatrix;
 use num::integer::div_ceil;
 use polars::frame::DataFrame;
 
@@ -39,7 +38,7 @@ pub trait SnapData: AnnDataOp {
     fn read_chrom_values(
         &self,
         chunk_size: usize,
-    ) -> Result<ChromValueIter<<<Self as AnnDataOp>::X as ArrayElemOp>::ArrayIter<CsrMatrix<u32>>>>
+    ) -> Result<ChromValueIter<<<Self as AnnDataOp>::X as ArrayElemOp>::ArrayIter<DynCsrMatrix>>>
     {
         let regions = self
             .var_names()

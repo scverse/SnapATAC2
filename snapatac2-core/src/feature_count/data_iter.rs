@@ -3,7 +3,7 @@ use crate::genome::{ChromSizes, GenomeBaseIndex};
 use crate::preprocessing::{Fragment, SummaryType};
 
 use anndata::backend::{DataType, ScalarType};
-use anndata::data::{DynCsrMatrix, Element};
+use anndata::data::{ArrayConvert, DynCsrMatrix, Element};
 use anndata::{
     data::{utils::to_csr_data, CsrNonCanonical},
     ArrayData,
@@ -866,23 +866,24 @@ pub struct ChromValueIter<I> {
     pub(crate) length: usize,
 }
 
-impl<'a, I, T> ChromValueIter<I>
+impl<'a, I> ChromValueIter<I>
 where
-    I: ExactSizeIterator<Item = (CsrMatrix<T>, usize, usize)> + 'a,
-    T: Copy,
+    I: ExactSizeIterator<Item = (DynCsrMatrix, usize, usize)> + 'a,
 {
     /// Aggregate the values in the iterator by the given `FeatureCounter`.
-    pub fn aggregate_by<C>(
+    pub fn aggregate_by<C, T>(
         self,
         mut counter: C,
     ) -> impl ExactSizeIterator<Item = (CsrMatrix<T>, usize, usize)>
     where
         C: FeatureCounter<Value = T> + Clone + Sync,
-        T: Sync + Send + num::ToPrimitive,
+        T: Copy + Sync + Send + num::ToPrimitive,
+        DynCsrMatrix: ArrayConvert<CsrMatrix<T>>,
     {
         let n_col = counter.num_features();
         counter.reset();
         self.iter.map(move |(mat, i, j)| {
+            let mat: CsrMatrix<T> = mat.try_convert().unwrap();
             let n = j - i;
             let vec = (0..n)
                 .into_par_iter()

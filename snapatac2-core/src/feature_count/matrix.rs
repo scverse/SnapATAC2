@@ -1,9 +1,10 @@
 use super::counter::{CountingStrategy, FeatureCounter, GeneCount, RegionCounter, TranscriptCount};
 use super::ValueType;
-use crate::genome::{Promoters, Transcript};
 use crate::feature_count::SnapData;
+use crate::genome::{Promoters, Transcript};
 use crate::preprocessing::SummaryType;
 
+use anndata::ArrayElemOp;
 use anndata::{data::DataFrameIndex, AnnDataOp, ArrayData};
 use anyhow::{bail, Result};
 use bed_utils::bed::{map::GIntervalIndexSet, BEDLike};
@@ -72,7 +73,11 @@ where
         }
 
         feature_names = values.get_gindex().to_index().into();
-        data_iter = Box::new(values.into_array_iter(val_type, summary_type).map(|x| ArrayData::from(x.0)));
+        data_iter = Box::new(
+            values
+                .into_array_iter(val_type, summary_type)
+                .map(|x| ArrayData::from(x.0)),
+        );
     } else {
         bail!("No fragment or base data found in the anndata object");
     };
@@ -119,14 +124,34 @@ where
     let data_iter: Box<dyn ExactSizeIterator<Item = ArrayData>>;
     let feature_names: Vec<String>;
 
+    // Use data matrix stored in .X
     if use_x {
-        let counter = RegionCounter::new(&regions);
-        feature_names = counter.get_feature_ids();
-        let data = adata
-            .read_chrom_values(chunk_size)?
-            .aggregate_by(counter)
-            .map(|x| x.0.into());
-        data_iter = Box::new(data);
+        let is_floating = adata
+            .x()
+            .dtype()
+            .unwrap()
+            .scalar_type()
+            .unwrap()
+            .is_floating();
+        data_iter = if is_floating {
+            let counter: RegionCounter<f64> = RegionCounter::new(&regions);
+            feature_names = counter.get_feature_ids();
+            Box::new(
+                adata
+                    .read_chrom_values(chunk_size)?
+                    .aggregate_by(counter)
+                    .map(|x| x.0.into()),
+            )
+        } else {
+            let counter: RegionCounter<u32> = RegionCounter::new(&regions);
+            feature_names = counter.get_feature_ids();
+            Box::new(
+                adata
+                    .read_chrom_values(chunk_size)?
+                    .aggregate_by(counter)
+                    .map(|x| x.0.into()),
+            )
+        };
     } else if let Ok(mut fragments) = adata.get_fragment_iter(chunk_size) {
         let counter = RegionCounter::new(&regions);
         feature_names = counter.get_feature_ids();
@@ -189,85 +214,97 @@ where
     B: AnnDataOp,
 {
     let promoters = Promoters::new(transcripts, upstream, downstream, include_gene_body);
-    let transcript_counter: TranscriptCount<'_> = TranscriptCount::new(&promoters);
-    match id_type {
-        "transcript" => {
-            let gene_names: Vec<String> = transcript_counter
+    let transcript_counter = TranscriptCount::new(&promoters);
+    let data: Box<dyn ExactSizeIterator<Item = ArrayData>>;
+    let ids: Vec<String>;
+    let gene_names: Option<Vec<String>> = if id_type == "transcript" {
+        Some(
+            transcript_counter
                 .gene_names()
                 .iter()
                 .map(|x| x.clone())
-                .collect();
-            let ids = transcript_counter.get_feature_ids();
-            let data: Box<dyn ExactSizeIterator<Item = _>> = if use_x {
-                Box::new(
+                .collect(),
+        )
+    } else {
+        None
+    };
+
+    if use_x {
+        match id_type {
+            "transcript" => {
+                ids = transcript_counter.get_feature_ids();
+                data = Box::new(
                     adata
                         .read_chrom_values(chunk_size)?
                         .aggregate_by(transcript_counter)
-                        .map(|x| x.0),
-                )
-            } else {
-                let mut fragments = adata
-                    .get_fragment_iter(chunk_size)?
-                    .set_counting_strategy(counting_strategy);
-                if let Some(min_fragment_size) = min_fragment_size {
-                    fragments = fragments.min_fragment_size(min_fragment_size);
-                }
-                if let Some(max_fragment_size) = max_fragment_size {
-                    fragments = fragments.max_fragment_size(max_fragment_size);
-                }
-                Box::new(
-                    fragments
-                        .into_aggregated_array_iter(transcript_counter)
-                        .map(|x| x.0),
-                )
-            };
-            if let Some(adata_out) = out {
-                adata_out.set_x_from_iter(data)?;
-                adata_out.set_obs_names(adata.obs_names())?;
-                adata_out.set_var_names(ids.into())?;
-                adata_out.set_var(DataFrame::new(vec![Column::new("gene_name".into(), gene_names)])?)?;
-            } else {
-                adata.set_x_from_iter(data)?;
-                adata.set_var_names(ids.into())?;
-                adata.set_var(DataFrame::new(vec![Column::new("gene_name".into(), gene_names)])?)?;
+                        .map(|x| x.0.into()),
+                );
             }
-        }
-        "gene" => {
-            let gene_counter: GeneCount<'_> = GeneCount::new(transcript_counter);
-            let ids = gene_counter.get_feature_ids();
-            let data: Box<dyn ExactSizeIterator<Item = _>> = if use_x {
-                Box::new(
+            "gene" => {
+                let gene_counter: GeneCount<'_> = GeneCount::new(transcript_counter);
+                ids = gene_counter.get_feature_ids();
+                data = Box::new(
                     adata
                         .read_chrom_values(chunk_size)?
                         .aggregate_by(gene_counter)
-                        .map(|x| x.0),
-                )
-            } else {
-                let mut fragments = adata
-                    .get_fragment_iter(chunk_size)?
-                    .set_counting_strategy(counting_strategy);
-                if let Some(min_fragment_size) = min_fragment_size {
-                    fragments = fragments.min_fragment_size(min_fragment_size);
-                }
-                if let Some(max_fragment_size) = max_fragment_size {
-                    fragments = fragments.max_fragment_size(max_fragment_size);
-                }
-                Box::new(
+                        .map(|x| x.0.into()),
+                );
+            }
+            _ => panic!("id_type must be 'transcript' or 'gene'"),
+        }
+    } else {
+        let mut fragments = adata
+            .get_fragment_iter(chunk_size)?
+            .set_counting_strategy(counting_strategy);
+        if let Some(min_fragment_size) = min_fragment_size {
+            fragments = fragments.min_fragment_size(min_fragment_size);
+        }
+        if let Some(max_fragment_size) = max_fragment_size {
+            fragments = fragments.max_fragment_size(max_fragment_size);
+        }
+
+        match id_type {
+            "transcript" => {
+                ids = transcript_counter.get_feature_ids();
+                data = Box::new(
+                    fragments
+                        .into_aggregated_array_iter(transcript_counter)
+                        .map(|x| x.0.into()),
+                );
+            }
+            "gene" => {
+                let gene_counter: GeneCount<'_> = GeneCount::new(transcript_counter);
+                ids = gene_counter.get_feature_ids();
+                data = Box::new(
                     fragments
                         .into_aggregated_array_iter(gene_counter)
-                        .map(|x| x.0),
+                        .map(|x| x.0.into()),
                 )
-            };
-            if let Some(adata_out) = out {
-                adata_out.set_x_from_iter(data)?;
-                adata_out.set_obs_names(adata.obs_names())?;
-                adata_out.set_var_names(ids.into())?;
-            } else {
-                adata.set_x_from_iter(data)?;
-                adata.set_var_names(ids.into())?;
             }
+            _ => panic!("id_type must be 'transcript' or 'gene'"),
         }
-        _ => panic!("id_type must be 'transcript' or 'gene'"),
     }
+
+    if let Some(adata_out) = out {
+        adata_out.set_x_from_iter(data)?;
+        adata_out.set_obs_names(adata.obs_names())?;
+        adata_out.set_var_names(ids.into())?;
+        if let Some(gene_names) = gene_names {
+            adata_out.set_var(DataFrame::new(vec![Column::new(
+                "gene_name".into(),
+                gene_names,
+            )])?)?;
+        }
+    } else {
+        adata.set_x_from_iter(data)?;
+        adata.set_var_names(ids.into())?;
+        if let Some(gene_names) = gene_names {
+            adata.set_var(DataFrame::new(vec![Column::new(
+                "gene_name".into(),
+                gene_names,
+            )])?)?;
+        }
+    }
+
     Ok(())
 }
