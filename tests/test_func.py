@@ -1,50 +1,9 @@
 import unittest
 import numpy as np
 import snapatac2._snapatac2 as sa
-from snapatac2.tools._misc import _groupby
 import random
 from scipy import sparse
 import pytest
-
-def test_group_arr():
-    labels = [1, 2, 3, 4]
-    input = {}
-    mats = []
-    for i in labels:
-        mat = np.random.randint(1, 10000, 1000).reshape(10, 100)
-        mats.append(np.hstack((np.full((10, 1), i), mat)))
-        input[i] = mat.sum(axis = 0)
-    merged = np.vstack(mats)
-    np.random.shuffle(merged)
-    labels = merged[:, 0]
-    mats = merged[:, 1:]
-    result = _groupby(mats, labels)
-    output = {}
-    for (k, v) in result.items():
-        output[k] = np.ravel(v.sum(axis = 0))
-
-    for k, v in input.items():
-        np.testing.assert_array_equal(v, output[k])
-
-def test_group_csr():
-    labels = [1, 2, 3, 4]
-    input = {}
-    mats = []
-    for i in labels:
-        mat = np.random.randint(1, 10000, 1000).reshape(10, 100)
-        mats.append(np.hstack((np.full((10, 1), i), mat)))
-        input[i] = mat.sum(axis = 0)
-    merged = np.vstack(mats)
-    np.random.shuffle(merged)
-    labels = merged[:, 0]
-    mats = sparse.csr_matrix(merged[:, 1:])
-    result = _groupby(mats, labels)
-    output = {}
-    for (k, v) in result.items():
-        output[k] = np.ravel(v.sum(axis = 0))
-
-    for k, v in input.items():
-        np.testing.assert_array_equal(v, output[k])
 
 def repeat(times):
     def repeatHelper(f):

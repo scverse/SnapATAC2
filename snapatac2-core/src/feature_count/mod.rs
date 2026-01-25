@@ -1,6 +1,7 @@
 mod matrix;
 mod counter;
 mod data_iter;
+pub mod aggregator;
 
 use std::str::FromStr;
 

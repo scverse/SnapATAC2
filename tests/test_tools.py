@@ -3,7 +3,6 @@ import snapatac2 as snap
 import numpy as np
 import anndata as ad
 from pathlib import Path
-from natsort import natsorted
 from collections import defaultdict
 import pytest
 from hypothesis import given, settings, HealthCheck, strategies as st
@@ -49,13 +48,6 @@ def h5ad(dir=Path("./")):
 )
 @settings(max_examples=10, deadline=None, suppress_health_check = [HealthCheck.function_scoped_fixture])
 def test_aggregation(x, groups, var, tmp_path):
-    def assert_equal(a, b):
-        assert a.keys() == b.keys()
-        np.testing.assert_array_equal(
-            np.array(list(a.values())),
-            np.array(list(b.values())),
-        )
-
     groups = [str(g) for g in groups]
     obs_names = [str(i) for i in range(len(groups))]
     var_names = [str(i) for i in range(len(var))]
@@ -66,22 +58,29 @@ def test_aggregation(x, groups, var, tmp_path):
         filename = h5ad(tmp_path),
     )
 
+    x = x.astype(np.float64)
     expected = defaultdict(list)
     for g, v in zip(groups, list(x)):
         expected[g].append(v)
     for k in expected.keys():
         expected[k] = np.array(expected[k], dtype="float64").sum(axis = 0)
-    expected = dict(natsorted(expected.items()))
+    expected = dict(expected.items())
 
-    np.testing.assert_array_equal(
+    np.testing.assert_array_almost_equal_nulp(
         x.sum(axis=0),
-        snap.tl.aggregate_X(adata),
+        np.ravel(snap.tl.aggregate_X(adata).X),
     )
-    np.testing.assert_array_equal(
+
+    np.testing.assert_array_almost_equal_nulp(
         np.array(list(expected.values())),
         snap.tl.aggregate_X(adata, file = h5ad(tmp_path), groupby=groups).X[:],
     )
 
+    adata.X = csr_matrix(adata.X[:])
+    np.testing.assert_array_almost_equal_nulp(
+        np.array(list(expected.values())),
+        snap.tl.aggregate_X(adata, file = h5ad(tmp_path), groupby=groups).X[:],
+    )
 
 def test_make_fragment(datadir, tmp_path):
     bam = str(datadir.join('test.bam'))

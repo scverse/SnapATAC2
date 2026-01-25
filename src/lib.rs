@@ -67,6 +67,7 @@ fn _snapatac2(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(network::link_region_to_gene, m)?)?;
 
+    m.add_function(wrap_pyfunction!(utils::aggregate_x, m)?)?;
     m.add_function(wrap_pyfunction!(utils::jaccard_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(utils::cosine_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(utils::pearson, m)?)?;

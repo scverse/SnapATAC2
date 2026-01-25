@@ -4,7 +4,6 @@ from typing import Literal
 import logging
 from pathlib import Path
 import numpy as np
-import functools
 
 import snapatac2._snapatac2 as internal
 from snapatac2._utils import is_anndata 
@@ -43,7 +42,6 @@ def aggregate_X(
         If `grouby` is `None`, return a 1d array. Otherwise, return an AnnData
         object.
     """
-    from natsort import natsorted
     from anndata import AnnData
 
     def norm(x):
@@ -58,32 +56,23 @@ def aggregate_X(
             raise NameError("Normalization method must be 'RPKM' or 'RPM'")
 
     if groupby is None:
-        row_sum = functools.reduce(
-            lambda a, b: a + b,
-            (np.ravel(chunk.sum(axis=0)) for chunk, _, _ in adata.chunked_X(1000)),
-        )
-        row_sum = norm(row_sum)
-        return row_sum
+        groups = None
     else:
-        groups = adata.obs[groupby].to_numpy() if isinstance(groupby, str) else np.array(groupby)
-        if groups.size != adata.n_obs:
-            raise NameError("the length of `groupby` should equal to the number of obervations")
+        groups = adata.obs[groupby] if isinstance(groupby, str) else groupby
+        groups = [x for x in groups]
 
-        result = {x: np.zeros(adata.n_vars) for x in natsorted(np.unique(groups))}
-        for chunk, start, stop in adata.chunked_X(2000):
-            for i in range(start, stop):
-                result[groups[i]] += chunk[i-start, :]
-        for k in result.keys():
-            result[k] = norm(np.ravel(result[k]))
+    result = internal.aggregate_x(adata, groups)
+    norm(result)
 
-        keys, values = zip(*result.items())
-        if file is None:
-            out_adata = AnnData(X=np.array(values))
-        else:
-            out_adata = internal.AnnData(filename=file, X=np.array(values))
-        out_adata.obs_names = list(keys)
-        out_adata.var_names = adata.var_names
-        return out_adata
+    if file is None:
+        out_adata = AnnData(X=result)
+    else:
+        out_adata = internal.AnnData(filename=file, X=result)
+
+    if groups is not None:
+        out_adata.obs_names = list(set(groups))
+    out_adata.var_names = adata.var_names
+    return out_adata
 
 def aggregate_cells(
     adata: internal.AnnData | internal.AnnDataSet | np.ndarray,
@@ -309,20 +298,13 @@ def _hierarchical_enrichment(
         Z, list(marker_genes.values()), list(marker_genes.keys()),
     )
 
-
-def _groupby(x, groups):
-    idx = groups.argsort()
-    groups = groups[idx]
-    x = x[idx]
-    u, indices = np.unique(groups, return_index=True)
-    splits = np.split(np.arange(x.shape[0]), indices[1:])
-    return dict((label, x[indices, :]) for (label, indices) in zip(u, splits))
-
-def _normalize(x, size_factor = None):
-    result = x / (x.sum() / 1000000.0)
-    if size_factor is not None:
-        result /= size_factor
-    return result
+def _normalize(X, size_factor = None):
+    for i in range(X.shape[0]):
+        x = X[i, :]
+        x = x / (x.sum() / 1000000.0)
+        if size_factor is not None:
+            x /= size_factor
+        X[i, :] = x
 
 def _get_sizes(regions):
     def size(x):

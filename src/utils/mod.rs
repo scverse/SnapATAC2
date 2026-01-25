@@ -2,6 +2,9 @@ mod anndata;
 
 pub use self::anndata::AnnDataLike;
 
+use ::anndata::Backend;
+use std::ops::Deref;
+use anndata_hdf5::H5;
 use anyhow::Result;
 use bed_utils::bed::{BEDLike, MergeBed};
 use bed_utils::extsort::ExternalSorterBuilder;
@@ -14,6 +17,7 @@ use snapatac2_core::genome::{
     read_transcripts_from_gff, read_transcripts_from_gtf, Transcript, TranscriptParserOptions,
 };
 use snapatac2_core::utils;
+use snapatac2_core::feature_count::aggregator;
 
 use bed_utils::{bed, bed::GenomicRange, bed::BED};
 use linreg::lin_reg_imprecise;
@@ -21,6 +25,21 @@ use nalgebra_sparse::CsrMatrix;
 use std::io::BufReader;
 use std::path::PathBuf;
 use std::str::FromStr;
+
+#[pyfunction]
+pub fn aggregate_x<'py>(
+    py: Python<'py>,
+    anndata: AnnDataLike,
+    groupby: Option<Vec<Option<String>>>,
+) -> Bound<'py, PyArray<f64, Ix2>> {
+    macro_rules! run {
+        ($data:expr) => {
+            aggregator::aggregate_x(&$data, groupby.as_deref()).unwrap().into_pyarray(py)
+        };
+    }
+
+    crate::with_anndata!(&anndata, run)
+}
 
 macro_rules! with_sparsity_pattern {
     ($dtype:expr, $indices:expr, $indptr:expr, $n:expr, $fun:ident) => {
