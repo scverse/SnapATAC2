@@ -19,13 +19,13 @@ pub fn aggregate_x<A: AnnDataOp>(
         adata
             .x()
             .iter::<ArrayData>(5000)
-            .for_each(|(chunk, _, _)| match chunk {
+            .for_each(|(chunk, pos, _)| match chunk {
                 ArrayData::Array(arr) => {
                     let arr: Array2<f64> = arr.try_convert().unwrap();
                     arr.axis_iter(ndarray::Axis(0))
                         .enumerate()
                         .for_each(|(i, row)| {
-                            if let Some(g) = &groupby[i] {
+                            if let Some(g) = &groupby[pos+i] {
                                 let i = groups.get_index_of(g).unwrap();
                                 row.iter().enumerate().for_each(|(j, v)| {
                                     result[(i, j)] += *v;
@@ -36,7 +36,7 @@ pub fn aggregate_x<A: AnnDataOp>(
                 ArrayData::CsrMatrix(csr) => {
                     let csr: CsrMatrix<f64> = csr.try_convert().unwrap();
                     for (i, row) in csr.row_iter().enumerate() {
-                        if let Some(g) = &groupby[i] {
+                        if let Some(g) = &groupby[pos+i] {
                             let i = groups.get_index_of(g).unwrap();
                             row.col_indices()
                                 .iter()

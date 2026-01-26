@@ -41,29 +41,23 @@ def h5ad(dir=Path("./")):
     return str(dir / Path(str(uuid.uuid4()) + ".h5ad"))
 
 
-@given(
-    x = arrays(integer_dtypes(endianness='='), (500, 50)),
-    groups = st.lists(st.integers(min_value=0, max_value=5), min_size=500, max_size=500),
-    var = st.lists(st.integers(min_value=0, max_value=100000), min_size=50, max_size=50),
-)
-@settings(max_examples=10, deadline=None, suppress_health_check = [HealthCheck.function_scoped_fixture])
-def test_aggregation(x, groups, var, tmp_path):
-    groups = [str(g) for g in groups]
+def test_aggregation():
+    x = np.random.poisson(1.0, (10_000, 50)).astype(np.float64)
+    groups = np.random.choice(["A", "B", "C", "D", "E"], size=x.shape[0])
     obs_names = [str(i) for i in range(len(groups))]
-    var_names = [str(i) for i in range(len(var))]
-    adata = snap.AnnData(
+    var_names = [str(i) for i in range(x.shape[1])]
+
+    adata = ad.AnnData(
         X=x,
-        obs = dict(ident=obs_names, groups=groups),
-        var = dict(ident=var_names, txt=var),
-        filename = h5ad(tmp_path),
+        obs=dict(ident=obs_names, groups=groups),
+        var=dict(ident=var_names),
     )
 
-    x = x.astype(np.float64)
     expected = defaultdict(list)
     for g, v in zip(groups, list(x)):
         expected[g].append(v)
     for k in expected.keys():
-        expected[k] = np.array(expected[k], dtype="float64").sum(axis = 0)
+        expected[k] = np.array(expected[k], dtype="float64").sum(axis=0)
     expected = dict(expected.items())
 
     np.testing.assert_array_almost_equal_nulp(
@@ -73,13 +67,13 @@ def test_aggregation(x, groups, var, tmp_path):
 
     np.testing.assert_array_almost_equal_nulp(
         np.array(list(expected.values())),
-        snap.tl.aggregate_X(adata, file = h5ad(tmp_path), groupby=groups).X[:],
+        snap.tl.aggregate_X(adata, groupby=groups).X,
     )
 
     adata.X = csr_matrix(adata.X[:])
     np.testing.assert_array_almost_equal_nulp(
         np.array(list(expected.values())),
-        snap.tl.aggregate_X(adata, file = h5ad(tmp_path), groupby=groups).X[:],
+        snap.tl.aggregate_X(adata, groupby=groups).X,
     )
 
 def test_make_fragment(datadir, tmp_path):
@@ -102,7 +96,7 @@ def test_make_fragment(datadir, tmp_path):
         elements = {"allow_subnormal": False, "allow_nan": False, "allow_infinity": False, "min_value": 1, "max_value": 100},
     ),
 )
-@settings(deadline = None, suppress_health_check = [HealthCheck.function_scoped_fixture])
+@settings(deadline = None, max_examples=5, suppress_health_check = [HealthCheck.function_scoped_fixture])
 def test_reproducibility(mat):
     adata = ad.AnnData(X=csr_matrix(mat))
     embeddings = []

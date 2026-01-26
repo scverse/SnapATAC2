@@ -53,6 +53,7 @@ impl PyDNAMotif {
         PyDNAMotif(motif)
     }
 
+    /// The unique identifier of the motif.
     #[getter]
     fn id(&self) -> String {
         self.0.id.clone()
@@ -64,6 +65,7 @@ impl PyDNAMotif {
         Ok(())
     }
 
+    /// The name of the motif.
     #[getter]
     fn name(&self) -> Option<String> {
         self.0.name.clone()
@@ -75,6 +77,7 @@ impl PyDNAMotif {
         Ok(())
     }
 
+    /// The family of the motif.
     #[getter]
     fn family(&self) -> Option<String> {
         self.0.family.clone()
@@ -86,10 +89,28 @@ impl PyDNAMotif {
         Ok(())
     }
 
+    /// Return the information content of the motif.
     fn info_content(&self) -> f64 {
         self.0.info_content()
     }
 
+    /// Create a motif scanner with specified nucleotide background probabilities.
+    /// 
+    /// Parameters
+    /// ----------
+    /// a: float
+    ///     Background probability of nucleotide A. Default is 0.25.
+    /// c: float
+    ///     Background probability of nucleotide C. Default is 0.25.
+    /// g: float
+    ///     Background probability of nucleotide G. Default is 0.25.
+    /// t: float
+    ///     Background probability of nucleotide T. Default is 0.25.
+    /// 
+    /// Returns
+    /// -------
+    /// PyDNAMotifScanner
+    ///     A DNA motif scanner object.
     #[pyo3(signature = (a=0.25, c=0.25, g=0.25, t=0.25))]
     fn with_nucl_prob(&self, a: f64, c: f64, g: f64, t: f64) -> PyDNAMotifScanner {
         PyDNAMotifScanner(
@@ -100,6 +121,9 @@ impl PyDNAMotif {
     }
 }
 
+/**
+    Python object for scanning DNA sequences with a motif.
+ */
 #[pyclass]
 #[repr(transparent)]
 #[derive(Clone)]
@@ -107,21 +131,54 @@ pub struct PyDNAMotifScanner(pub motif::DNAMotifScanner);
 
 #[pymethods]
 impl PyDNAMotifScanner {
+    /// The unique identifier of the motif.
     #[getter]
     fn id(&self) -> String {
         self.0.motif.id.clone()
     }
 
+    /// The name of the motif.
     #[getter]
     fn name(&self) -> Option<String> {
         self.0.motif.name.clone()
     }
 
+    /// Find motif occurrences in the given sequence above the specified p-value threshold.
+    /// 
+    /// Note it does not consider reverse complement matches.
+    /// 
+    /// Parameters
+    /// ----------
+    /// seq: str
+    ///     DNA sequence to scan.
+    /// pvalue: float
+    ///     P-value threshold for reporting motif occurrences. Default is 1e-5.
+    /// 
+    /// Returns
+    /// -------
+    /// list[tuple[int, float]]
+    ///     A list of tuples where each tuple contains the position of the motif occurrence
+    ///     and the corresponding p-value.
     #[pyo3(signature = (seq, pvalue=1e-5))]
     fn find(&self, seq: &str, pvalue: f64) -> Vec<(usize, f64)> {
         self.0.find(seq.as_bytes(), pvalue).collect()
     }
 
+    /// Check if the motif exists in the given sequence above the specified p-value threshold.
+    /// 
+    /// Parameters
+    /// ----------
+    /// seq: str
+    ///     DNA sequence to scan.
+    /// pvalue: float
+    ///     P-value threshold for reporting motif occurrences. Default is 1e-5.
+    /// rc: bool
+    ///     Whether to consider reverse complement matches. Default is True.
+    /// 
+    /// Returns
+    /// -------
+    /// bool
+    ///     True if the motif exists in the sequence, False otherwise.
     #[pyo3(signature = (seq, pvalue=1e-5, rc=true))]
     fn exist(&self, seq: &str, pvalue: f64, rc: bool) -> bool {
         self.0.find(seq.as_bytes(), pvalue).next().is_some()
@@ -133,6 +190,23 @@ impl PyDNAMotifScanner {
                     .is_some())
     }
 
+    /// Batch check if the motif exists in the given sequences above the specified p-value threshold.
+    /// 
+    /// This performs parallel computation over the input sequences.
+    /// 
+    /// Parameters
+    /// ----------
+    /// seqs: list[str]
+    ///     List of DNA sequences to scan.
+    /// pvalue: float
+    ///     P-value threshold for reporting motif occurrences. Default is 1e-5.
+    /// rc: bool
+    ///     Whether to consider reverse complement matches. Default is True.
+    /// 
+    /// Returns
+    /// -------
+    /// list[bool]
+    ///     A list of booleans indicating whether the motif exists in each sequence.
     #[pyo3(signature = (seqs, pvalue=1e-5, rc=true))]
     fn exists(&self, seqs: Vec<PyBackedStr>, pvalue: f64, rc: bool) -> Vec<bool> {
         seqs.into_par_iter()
@@ -140,6 +214,21 @@ impl PyDNAMotifScanner {
             .collect()
     }
 
+    /// Create a motif test object using background sequences.
+    /// 
+    /// This create a PyDNAMotifTest object which can be later used to test motif enrichment.
+    /// 
+    /// Parameters
+    /// ----------
+    /// seqs: list[str]
+    ///     List of background DNA sequences.
+    /// pvalue: float
+    ///     P-value threshold for reporting motif occurrences. Default is 1e-5.
+    /// 
+    /// Returns
+    /// -------
+    /// PyDNAMotifTest
+    ///     A DNA motif test object.
     #[pyo3(signature = (seqs, pvalue=1e-5))]
     fn with_background(&self, seqs: Vec<PyBackedStr>, pvalue: f64) -> PyDNAMotifTest {
         let n = seqs.len();
@@ -178,16 +267,30 @@ pub struct PyDNAMotifTest {
 
 #[pymethods]
 impl PyDNAMotifTest {
+    /// The unique identifier of the motif.
     #[getter]
     fn id(&self) -> String {
         self.scanner.id()
     }
 
+    /// The name of the motif.
     #[getter]
     fn name(&self) -> Option<String> {
         self.scanner.name()
     }
 
+    /// Test motif enrichment in the given sequences.
+    /// 
+    /// Parameters
+    /// ----------
+    /// seqs: list[str]
+    ///     List of DNA sequences to test.
+    /// 
+    /// Returns
+    /// -------
+    /// tuple[float, float]
+    ///     A tuple containing the log2 fold change and p-value of motif enrichment.
+    #[pyo3(signature = (seqs))]
     fn test(&self, seqs: Vec<PyBackedStr>) -> (f64, f64) {
         let n = seqs.len().try_into().unwrap();
         let occurrence: u64 = seqs
