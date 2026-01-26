@@ -14,5 +14,6 @@ methods.
    metrics
    plotting
    export
+   motif
    datasets
    recipes

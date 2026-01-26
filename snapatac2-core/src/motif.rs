@@ -313,10 +313,10 @@ letter-probability matrix: alength= 4 w= 11 nsites= 14 E= 3.2e-035
 
         let motif1: DNAMotif = motif1_str.parse().unwrap();
         let cdf = ScoreCDF::new(&motif1, &Default::default());
-        //assert_eq!(cdf.prob_inverse(1.0 - 1e-4), scores[0]);
-        //let seq = "ATATCGGCATACGATACGGACGGAT";
-        let seq = "ATATCCCATCG";
+        assert!((cdf.prob_inverse(1.0 - 1e-4) - scores[0]).abs() < 1e-3);
+
+        //let seq = "ATATCCCATCG";
         //motif1.look_ahead_search(&bg, &motif1.optimal_scores_suffix(&bg), seq.as_bytes(), 20, 0.0);
-        let sites: Vec<_> = motif1.to_scanner(bg).find(seq.as_bytes(), 0.9).collect();
+        //otif1.to_scanner(bg).find(seq.as_bytes(), 0.9).collect::<Vec<_>>();
     }
 }

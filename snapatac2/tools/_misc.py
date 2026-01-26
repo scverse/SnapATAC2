@@ -70,7 +70,7 @@ def aggregate_X(
         out_adata = internal.AnnData(filename=file, X=result)
 
     if groups is not None:
-        out_adata.obs_names = list(set(groups))
+        out_adata.obs_names = list(set([x for x in groups if x is not None]))
     out_adata.var_names = adata.var_names
     return out_adata
 
@@ -300,11 +300,11 @@ def _hierarchical_enrichment(
 
 def _normalize(X, size_factor = None):
     for i in range(X.shape[0]):
-        x = X[i, :]
-        x = x / (x.sum() / 1000000.0)
-        if size_factor is not None:
-            x /= size_factor
-        X[i, :] = x
+        s = X[i, :].sum()
+        if s > 0:
+            X[i, :] /= s / 1000000.0
+            if size_factor is not None:
+                X[i, :] /= size_factor
 
 def _get_sizes(regions):
     def size(x):

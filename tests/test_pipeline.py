@@ -48,11 +48,18 @@ def pipeline(data, tmp_path):
 
     snap.tl.macs3(data, groupby="leiden", call_broad_peaks=True)
     snap.tl.macs3(data, groupby="leiden")
-    snap.tl.merge_peaks(data.uns["macs3"], snap.genome.hg38)
+    peaks = snap.tl.merge_peaks(data.uns["macs3"], snap.genome.hg38)
 
     snap.pp.make_gene_matrix(data, gene_anno=snap.genome.hg38)
+    snap.pp.make_gene_matrix(data, use_x=True, gene_anno=snap.genome.hg38)
 
     snap.ex.export_coverage(data, groupby="leiden", out_dir=tmp_path)
+
+    peak_mat = snap.pp.make_peak_matrix(data, use_rep=peaks['Peaks'])
+    mask = np.random.choice(peak_mat.n_obs, 50, replace=False)
+    leiden = data.obs["leiden"].to_numpy()
+    leiden[mask] = None
+    snap.tl.aggregate_X(peak_mat, groupby=leiden, normalize='RPKM')
 
 def test_backed(tmp_path):
     fragment_file = snap.datasets.pbmc500(downsample=True)
