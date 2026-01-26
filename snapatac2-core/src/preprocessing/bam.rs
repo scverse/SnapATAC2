@@ -34,7 +34,7 @@ impl FragmentQC {
     }
 
     pub fn update(&mut self, fragment: &Fragment) {
-        self.num_pcr_duplicates += fragment.count as u64 - 1;
+        self.num_pcr_duplicates += fragment.count() as u64 - 1;
         self.num_unique_fragments += 1;
         let size = fragment.len();
         if self.mitochondrion.as_ref().map_or(true, |mito| !mito.contains(fragment.chrom())) {

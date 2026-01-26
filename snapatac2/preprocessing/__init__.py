@@ -1,3 +1,4 @@
+from ._import_data import *
 from ._basic import *
 from ._knn import knn
 from ._mnn_correct import mnc_correct

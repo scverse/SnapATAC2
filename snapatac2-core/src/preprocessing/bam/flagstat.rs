@@ -1,4 +1,4 @@
-use bincode::{Decode, Encode};
+use bitcode::{Decode, Encode};
 use noodles::{bam::Record, sam::alignment::record::{Cigar, Flags, cigar::op::Kind}};
 use std::collections::{HashMap, HashSet};
 use anyhow::{Result, Context};

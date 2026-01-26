@@ -2,14 +2,15 @@ use crate::utils::AnnDataLike;
 
 use anyhow::{bail, Context};
 use bed_utils::bed::{BroadPeak, NarrowPeak, Strand};
+use bed_utils::extsort::{ExternalChunk, ExternalChunkBuilder};
 use indicatif::{ProgressIterator, ProgressStyle};
 use itertools::Itertools;
 use polars::prelude::Column;
 use pyo3::ffi::c_str;
-use snapatac2_core::utils::{self, Compression};
+use snapatac2_core::utils;
 use snapatac2_core::{
     preprocessing::Fragment,
-    utils::{clip_peak, merge_peaks, open_file_for_write},
+    utils::{clip_peak, merge_peaks},
     SnapData,
 };
 
@@ -26,7 +27,6 @@ use pyo3::{prelude::*, pybacked::PyBackedStr};
 use pyo3_polars::PyDataFrame;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::collections::HashSet;
-use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, ops::Deref, path::PathBuf};
 
@@ -382,32 +382,31 @@ pub fn create_fwtrack_obj<'py>(
             let kwargs = pyo3::types::PyDict::new(py);
             kwargs.set_item("buffer_size", 100000)?;
             let fwt = macs.getattr("FWTrack")?.call((), Some(&kwargs))?;
-            let reader = utils::open_file_for_read(&fl);
-            bed_utils::bed::io::Reader::new(reader, None)
-                .into_records::<Fragment>()
-                .try_for_each(|x| {
+            let mut reader: ExternalChunk<Fragment> = ExternalChunk::open(std::fs::File::open(fl)?)?;
+                reader.try_for_each(|x| {
                     let x = x?;
                     let chr = x.chrom().as_bytes();
-                    match x.strand() {
-                        None => {
-                            fwt.call_method1("add_loc", (chr, x.start(), 0))?;
-                            fwt.call_method1("add_loc", (chr, x.end() - 1, 1))?;
-                            if has_replicate {
-                                merged.call_method1("add_loc", (chr, x.start(), 0))?;
-                                merged.call_method1("add_loc", (chr, x.end() - 1, 1))?;
+                    if x.is_single() {
+                        match x.strand().unwrap() {
+                            Strand::Forward => {
+                                fwt.call_method1("add_loc", (chr, x.start(), 0))?;
+                                if has_replicate {
+                                    merged.call_method1("add_loc", (chr, x.start(), 0))?;
+                                }
+                            }
+                            Strand::Reverse => {
+                                fwt.call_method1("add_loc", (chr, x.end() - 1, 1))?;
+                                if has_replicate {
+                                    merged.call_method1("add_loc", (chr, x.end() - 1, 1))?;
+                                }
                             }
                         }
-                        Some(Strand::Forward) => {
-                            fwt.call_method1("add_loc", (chr, x.start(), 0))?;
-                            if has_replicate {
-                                merged.call_method1("add_loc", (chr, x.start(), 0))?;
-                            }
-                        }
-                        Some(Strand::Reverse) => {
-                            fwt.call_method1("add_loc", (chr, x.end() - 1, 1))?;
-                            if has_replicate {
-                                merged.call_method1("add_loc", (chr, x.end() - 1, 1))?;
-                            }
+                    } else {
+                        fwt.call_method1("add_loc", (chr, x.start(), 0))?;
+                        fwt.call_method1("add_loc", (chr, x.end() - 1, 1))?;
+                        if has_replicate {
+                            merged.call_method1("add_loc", (chr, x.start(), 0))?;
+                            merged.call_method1("add_loc", (chr, x.end() - 1, 1))?;
                         }
                     }
                     anyhow::Ok(())
@@ -479,12 +478,12 @@ fn _export_tags<D: SnapData, P: AsRef<std::path::Path>>(
     let files = unique_keys
         .into_iter()
         .map(|(a, b)| {
-            let filename = format!("{}_{}.zst", a, b);
+            let filename = format!("{}_{}.bin", a, b);
             if !sanitize_filename::is_sanitized(&filename) {
                 bail!("invalid filename: {}", filename);
             }
             let filename = dir.as_ref().join(&filename);
-            let writer = open_file_for_write(&filename, Some(Compression::Zstd), Some(1))?;
+            let writer = ExternalChunkBuilder::new(std::fs::File::create(&filename)?, 1)?;
             let val = (filename, Arc::new(Mutex::new(writer)));
             Ok(((a, b), val))
         })
@@ -506,12 +505,13 @@ fn _export_tags<D: SnapData, P: AsRef<std::path::Path>>(
                 if let Some((_, fl)) = files.get(&i) {
                     let mut fl = fl.lock().unwrap();
                     beds.into_iter()
-                        .for_each(|bed| writeln!(fl, "{}", bed.1).unwrap());
+                        .for_each(|bed|  fl.add(bed.1).unwrap());
                 }
             })
         });
     let mut result = HashMap::new();
-    files.into_iter().for_each(|((a, _), (filename, _))| {
+    files.into_iter().for_each(|((a, _), (filename, builder))| {
+        Arc::into_inner(builder).unwrap().into_inner().unwrap().finish().unwrap();
         result
             .entry(a.to_owned())
             .or_insert_with(Vec::new)
@@ -562,17 +562,18 @@ fn _call_peaks_bulk<'py, D: SnapData>(
         .try_for_each(|vals| {
             vals.0.into_iter().flatten().try_for_each(|x| {
                 let chr = x.chrom().as_bytes();
-                match x.strand() {
-                    None => {
-                        fwt.call_method1("add_loc", (chr, x.start(), 0))?;
-                        fwt.call_method1("add_loc", (chr, x.end() - 1, 1))?;
+                if x.is_single() {
+                    match x.strand().unwrap() {
+                        Strand::Forward => {
+                            fwt.call_method1("add_loc", (chr, x.start(), 0))?;
+                        }
+                        Strand::Reverse => {
+                            fwt.call_method1("add_loc", (chr, x.end() - 1, 1))?;
+                        }
                     }
-                    Some(Strand::Forward) => {
-                        fwt.call_method1("add_loc", (chr, x.start(), 0))?;
-                    }
-                    Some(Strand::Reverse) => {
-                        fwt.call_method1("add_loc", (chr, x.end() - 1, 1))?;
-                    }
+                } else {
+                    fwt.call_method1("add_loc", (chr, x.start(), 0))?;
+                    fwt.call_method1("add_loc", (chr, x.end() - 1, 1))?;
                 }
                 anyhow::Ok(())
             })

@@ -9,12 +9,15 @@
   - Add `pl.coverage` for quick visualization of signal coverage.
   - Add `tl.leiden_sweep` for optimizing the resolution parameter in Leiden clustering.
   - Various improvements to AnnData and AnnDataSet.
+  - Support new fragment file format from the latest CellRanger. 
 
 ### Breaking Changes:
 
   - `pp.import_data` is removed in favor of `pp.import_fragments`.
   - h5ad files are compressed using zstandard by default as this results in smaller file sizes and faster read/write speeds.
     hdf5plugin is needed to read/write these files if using the anndata python package.
+  - `pp.import_fragments` now treats fragment files as paired-end by default. To import single-end data, set `is_paired=False`.
+  - Removes `shift_left` and `shift_right` parameters from `pp.import_fragments`.
 
 ### Bugs fixed:
 

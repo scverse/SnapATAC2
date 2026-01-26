@@ -3,6 +3,7 @@ use crate::utils::*;
 use anndata::Backend;
 use anndata_hdf5::H5;
 use anyhow::Result;
+use bed_utils::bed::BEDLike;
 use bed_utils::extsort::ExternalSorterBuilder;
 use bed_utils::{bed, bed::GenomicRange};
 use itertools::Itertools;
@@ -10,7 +11,7 @@ use num::rational::Ratio;
 use pyanndata::PyAnnData;
 use pyo3::{prelude::*, pybacked::PyBackedStr};
 use snapatac2_core::feature_count::ValueType;
-use snapatac2_core::preprocessing::SummaryType;
+use snapatac2_core::preprocessing::{PairRead, SingleRead, SummaryType};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader};
@@ -18,9 +19,7 @@ use std::path::PathBuf;
 use std::{collections::BTreeMap, collections::HashSet, ops::Deref, str::FromStr};
 
 use snapatac2_core::{
-    feature_count::{
-        create_gene_matrix, create_peak_matrix, create_tile_matrix, BaseValue,
-    },
+    feature_count::{create_gene_matrix, create_peak_matrix, create_tile_matrix, BaseValue},
     genome::TranscriptParserOptions,
     preprocessing,
     preprocessing::{Contact, Fragment},
@@ -84,20 +83,41 @@ pub(crate) fn make_fragment_file(
         .collect())
 }
 
+fn read_fragments(fragment_file: &PathBuf, is_paired: bool) -> Box<dyn Iterator<Item = Fragment>> {
+    if is_paired {
+        Box::new(
+            bed::io::Reader::new(
+                utils::open_file_for_read(&fragment_file),
+                Some("#".to_string()),
+            )
+            .into_records::<PairRead>()
+            .map(|x| x.unwrap().into()),
+        )
+    } else {
+        Box::new(
+            bed::io::Reader::new(
+                utils::open_file_for_read(&fragment_file),
+                Some("#".to_string()),
+            )
+            .into_records::<SingleRead>()
+            .map(|x| x.unwrap().into()),
+        )
+    }
+}
+
 #[pyfunction]
 #[pyo3(signature = (
-    anndata, fragment_file, chrom_size, mitochondrial_dna, min_num_fragment,
-    fragment_is_sorted_by_name, shift_left, shift_right, chunk_size, white_list=None, tempdir=None
+    anndata, fragment_file, is_paired, chrom_size, mitochondrial_dna, min_num_fragment,
+    fragment_is_sorted_by_name, chunk_size, white_list=None, tempdir=None
 ))]
 pub(crate) fn import_fragments(
     anndata: AnnDataLike,
     fragment_file: PathBuf,
+    is_paired: bool,
     chrom_size: BTreeMap<String, u64>,
     mitochondrial_dna: Vec<String>,
     min_num_fragment: u64,
     fragment_is_sorted_by_name: bool,
-    shift_left: i64,
-    shift_right: i64,
     chunk_size: usize,
     white_list: Option<HashSet<String>>,
     tempdir: Option<PathBuf>,
@@ -106,14 +126,8 @@ pub(crate) fn import_fragments(
     let final_white_list = if fragment_is_sorted_by_name || min_num_fragment <= 0 {
         white_list
     } else {
-        let mut barcode_count = preprocessing::get_barcode_count(
-            bed::io::Reader::new(
-                utils::open_file_for_read(&fragment_file),
-                Some("#".to_string()),
-            )
-            .into_records()
-            .map(Result::unwrap),
-        );
+        let mut barcode_count =
+            preprocessing::get_barcode_count(read_fragments(&fragment_file, is_paired));
         let list: HashSet<String> = barcode_count
             .drain()
             .filter_map(|(k, v)| if v >= min_num_fragment { Some(k) } else { None })
@@ -124,16 +138,7 @@ pub(crate) fn import_fragments(
         }
     };
     let chrom_sizes = chrom_size.into_iter().collect();
-    let fragments = bed::io::Reader::new(
-        utils::open_file_for_read(&fragment_file),
-        Some("#".to_string()),
-    )
-    .into_records()
-    .map(|f| {
-        let mut f = f.unwrap();
-        shift_fragment(&mut f, shift_left, shift_right);
-        f
-    });
+    let fragments = read_fragments(&fragment_file, is_paired);
     let sorted_fragments: Box<dyn Iterator<Item = Fragment>> = if !fragment_is_sorted_by_name {
         let mut sorter = ExternalSorterBuilder::new()
             .with_chunk_size(50000000)
@@ -145,7 +150,7 @@ pub(crate) fn import_fragments(
             sorter
                 .build()
                 .unwrap()
-                .sort_by(fragments, |a, b| a.barcode.cmp(&b.barcode))
+                .sort_by(fragments, |a, b| a.name().cmp(&b.name()))
                 .unwrap()
                 .map(Result::unwrap),
         )
@@ -158,6 +163,7 @@ pub(crate) fn import_fragments(
             preprocessing::import_fragments(
                 $data,
                 sorted_fragments,
+                is_paired,
                 &mitochondrial_dna,
                 &chrom_sizes,
                 final_white_list.as_ref(),
@@ -169,18 +175,6 @@ pub(crate) fn import_fragments(
 
     crate::with_anndata!(&anndata, run);
     Ok(())
-}
-
-fn shift_fragment(fragment: &mut Fragment, shift_left: i64, shift_right: i64) {
-    if shift_left != 0 {
-        fragment.start = fragment.start.saturating_add_signed(shift_left);
-        if fragment.strand.is_some() {
-            fragment.end = fragment.end.saturating_add_signed(shift_left);
-        }
-    }
-    if shift_right != 0 && fragment.strand.is_none() {
-        fragment.end = fragment.end.saturating_add_signed(shift_right);
-    }
 }
 
 #[pyfunction]
@@ -253,7 +247,11 @@ pub(crate) fn import_values(
             <OsStr as AsRef<std::path::Path>>::as_ref(path.file_stem().unwrap()).file_stem()
         } else {
             path.file_stem()
-        }.unwrap().to_str().unwrap().to_string();
+        }
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
         let reader = BufReader::new(utils::open_file_for_read(&path));
         reader.lines().skip(1).map(move |line| {
             let line = line.unwrap();
@@ -275,7 +273,13 @@ pub(crate) fn import_values(
 
     macro_rules! run {
         ($data:expr) => {
-            preprocessing::import_values($data, sorted_values, &chrom_sizes, white_list.as_ref(), chunk_size)?
+            preprocessing::import_values(
+                $data,
+                sorted_values,
+                &chrom_sizes,
+                white_list.as_ref(),
+                chunk_size,
+            )?
         };
     }
 
@@ -527,8 +531,14 @@ pub(crate) fn tss_enrichment<'py>(
     let mut result = HashMap::new();
     result.insert("tsse", scores.into_pyobject(py)?);
     result.insert("library_tsse", library_tsse.0.into_pyobject(py)?.into_any());
-    result.insert("frac_overlap_TSS", library_tsse.1.into_pyobject(py)?.into_any());
-    result.insert("TSS_profile", tsse.get_counts().into_pyobject(py)?.into_any());
+    result.insert(
+        "frac_overlap_TSS",
+        library_tsse.1.into_pyobject(py)?.into_any(),
+    );
+    result.insert(
+        "TSS_profile",
+        tsse.get_counts().into_pyobject(py)?.into_any(),
+    );
     Ok(result)
 }
 

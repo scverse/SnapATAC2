@@ -31,6 +31,7 @@ use std::collections::{BTreeMap, HashSet};
 pub fn import_fragments<A, I>(
     anndata: &A,
     fragments: I,
+    is_paired: bool,
     mitochrondrial_dna: &HashSet<String>,
     chrom_sizes: &ChromSizes,
     white_list: Option<&HashSet<String>>,
@@ -48,12 +49,6 @@ where
             )
             .unwrap(),
         );
-    let mut fragments = fragments.peekable();
-    let is_paired = if let Some(f) = fragments.peek() {
-        f.strand.is_none()
-    } else {
-        false
-    };
     let obsm_key = if is_paired {
         FRAGMENT_PAIRED
     } else {
@@ -170,37 +165,49 @@ where
     let mut qc = FragmentQCBuilder::new(mitochrondrial_dna);
     let mut values = Vec::new();
     fragments.into_iter().for_each(|f| {
-        let chrom = &f.chrom;
+        let chrom = f.chrom();
         if genome_index.contain_chrom(chrom) {
             qc.update(&f);
-            let start = f.start as i64;
-            let end = f.end as i64;
+            let start = f.start() as i64;
+            let end = f.end() as i64;
             let size = end - start;
             let pos;
             let shift: V;
-            match f.strand {
-                Some(Strand::Reverse) => {
-                    pos = genome_index.get_position_rev(chrom, (end - 1) as u64);
-                    shift = (-size).try_into().expect(
-                        format!(
-                            "cannot convert size {} to {}",
-                            -size,
-                            std::any::type_name::<V>()
-                        )
-                        .as_str(),
-                    );
+            if f.is_single() {
+                match f.strand().unwrap() {
+                    Strand::Reverse => {
+                        pos = genome_index.get_position_rev(chrom, (end - 1) as u64);
+                        shift = (-size).try_into().expect(
+                            format!(
+                                "cannot convert size {} to {}",
+                                -size,
+                                std::any::type_name::<V>()
+                            )
+                            .as_str(),
+                        );
+                    }
+                    Strand::Forward => {
+                        pos = genome_index.get_position_rev(chrom, start as u64);
+                        shift = size.try_into().expect(
+                            format!(
+                                "cannot convert size {} to {}",
+                                size,
+                                std::any::type_name::<V>()
+                            )
+                            .as_str(),
+                        );
+                    }
                 }
-                _ => {
-                    pos = genome_index.get_position_rev(chrom, start as u64);
-                    shift = size.try_into().expect(
-                        format!(
-                            "cannot convert size {} to {}",
-                            size,
-                            std::any::type_name::<V>()
-                        )
-                        .as_str(),
-                    );
-                }
+            } else {
+                pos = genome_index.get_position_rev(chrom, start as u64);
+                shift = size.try_into().expect(
+                    format!(
+                        "cannot convert size {} to {}",
+                        size,
+                        std::any::type_name::<V>()
+                    )
+                    .as_str(),
+                );
             }
             values.push((pos, shift));
         }

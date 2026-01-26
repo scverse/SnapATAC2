@@ -137,15 +137,16 @@ def read_bed(bed_file):
 
 def test_import(datadir):
     test_files = [
-        snap.datasets.pbmc500(downsample=True),
-        str(datadir.join('test_clean.tsv.gz')),
-        str(datadir.join('test_single.tsv.gz')),
+        (snap.datasets.pbmc500(downsample=True), True),
+        (str(datadir.join('test_clean.tsv.gz')), True),
+        (str(datadir.join('test_single.tsv.gz')), False),
     ]
 
-    for fl in test_files:
+    for fl, paired in test_files:
         data = snap.pp.import_fragments(
             fl,
             chrom_sizes=snap.genome.hg38,
+            is_paired=paired,
             min_num_fragments=0,
             sorted_by_barcode=False,
         )

@@ -8,4 +8,5 @@ pub use qc::{
     SummaryType,
     get_barcode_count, make_promoter_map,
     read_tss, CellBarcode, Contact, Fragment, QualityControl, TSSe, TssRegions,
+    SingleRead, PairRead,
 };

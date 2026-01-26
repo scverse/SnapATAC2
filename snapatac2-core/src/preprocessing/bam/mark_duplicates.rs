@@ -28,7 +28,7 @@ use rayon::prelude::ParallelSliceMut;
 use anyhow::{Result, bail, anyhow, Context};
 use regex::Regex;
 
-use crate::preprocessing::Fragment;
+use crate::preprocessing::{Fragment, PairRead, SingleRead};
 use crate::preprocessing::bam::flagstat::AlignmentInfo;
 
 // Library type    orientation   Vizualization according to first strand
@@ -253,33 +253,33 @@ where
             } else {
                 (rec2_5p, rec1_5p)
             };
-            Some(Fragment {
+            Some(PairRead {
                 chrom: header.reference_sequences().get_index(ref_id1).unwrap().0.to_string(),
                 start: start as u64 - 1,
                 end: end as u64,
                 barcode: Some(rec1.barcode.as_ref().unwrap().clone()),
                 count: c.try_into().unwrap(),
                 strand: None,
-            })
+            }.into())
         }).collect();
         result.par_sort_unstable_by(|a, b| BEDLike::compare(a, b));
         result
     } else {
         rm_dup_single(reads).map(move |(r, c)| {
             let ref_id: usize = r.reference_sequence_id.try_into().unwrap();
-            Fragment {
+            SingleRead {
                 chrom: header.reference_sequences().get_index(ref_id).unwrap().0.to_string(),
                 start: r.alignment_start as u64 - 1,
                 end: r.alignment_end as u64,
                 barcode: Some(r.barcode.as_ref().unwrap().clone()),
                 count: c.try_into().unwrap(),
-                strand: Some(if r.flags().is_reverse_complemented() {
+                strand: if r.flags().is_reverse_complemented() {
                     Strand::Reverse
                 } else {
                     Strand::Forward
-                }),
+                },
             }
-        }).collect()
+        }.into()).collect()
     }
 }
 

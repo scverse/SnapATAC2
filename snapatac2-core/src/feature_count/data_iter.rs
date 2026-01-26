@@ -1,6 +1,6 @@
 use crate::feature_count::{CountingStrategy, FeatureCounter};
 use crate::genome::{ChromSizes, GenomeBaseIndex};
-use crate::preprocessing::{Fragment, SummaryType};
+use crate::preprocessing::{Fragment, PairRead, SingleRead, SummaryType};
 
 use anndata::backend::{DataType, ScalarType};
 use anndata::data::{ArrayConvert, DynCsrMatrix, Element};
@@ -58,20 +58,20 @@ fn single_to_fragments(
                             if size > 0 {
                                 start = pos_5p;
                                 end = start.checked_add_signed(size).unwrap();
-                                strand = Some(Strand::Forward);
+                                strand = Strand::Forward;
                             } else {
                                 end = pos_5p + 1;
                                 start = end.checked_add_signed(size).unwrap();
-                                strand = Some(Strand::Reverse);
+                                strand = Strand::Reverse;
                             }
-                            Some(Fragment {
+                            Some(SingleRead {
                                 chrom: chrom.to_string(),
                                 start,
                                 end,
                                 barcode,
                                 count,
                                 strand,
-                            })
+                            }.into())
                         }
                     })
                     .collect()
@@ -108,14 +108,14 @@ fn pair_to_fragments(
                         {
                             None
                         } else {
-                            Some(Fragment {
+                            Some(PairRead {
                                 chrom: chrom.to_string(),
                                 start,
                                 end: start + size,
                                 barcode: None,
                                 count: 1,
                                 strand: None,
-                            })
+                            }.into())
                         }
                     })
                     .collect()

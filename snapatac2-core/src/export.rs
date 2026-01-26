@@ -7,8 +7,9 @@ use crate::{
 
 use anyhow::{bail, ensure, Context, Result};
 use bed_utils::bed::MergeBed;
+use bed_utils::extsort::ExternalChunk;
 use bed_utils::{
-    bed::{io, map::GIntervalMap, BEDLike, BedGraph},
+    bed::{map::GIntervalMap, BEDLike, BedGraph},
     extsort::ExternalSorterBuilder,
 };
 use bigtools::BigWigWrite;
@@ -16,6 +17,7 @@ use indicatif::{style::ProgressStyle, ParallelProgressIterator, ProgressIterator
 use itertools::Itertools;
 use log::info;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use std::fs::OpenOptions;
 use std::{
     collections::{HashMap, HashSet},
     io::Write,
@@ -97,7 +99,7 @@ pub trait Exporter: SnapData {
                         let mut fl = fl.lock().unwrap();
                         frags.into_iter().try_for_each(|(i, mut f)| {
                             if let Some(barcodes) = barcodes {
-                                f.barcode = Some(barcodes[i].to_string());
+                                f.set_barcode(Some(barcodes[i]));
                             }
                             writeln!(fl, "{}", f)
                         })?;
@@ -108,6 +110,88 @@ pub trait Exporter: SnapData {
         Ok(files
             .into_iter()
             .map(|(k, (v, _))| (k.to_string(), v))
+            .collect())
+    }
+
+    fn export_serialized_fragments<P: AsRef<Path>>(
+        &self,
+        barcodes: Option<&Vec<&str>>,
+        group_by: &Vec<&str>,
+        selections: Option<HashSet<&str>>,
+        min_fragment_length: Option<u64>,
+        max_fragment_length: Option<u64>,
+        dir: P,
+        prefix: &str,
+    ) -> Result<HashMap<String, ExternalChunk<Fragment>>> {
+        ensure!(self.n_obs() == group_by.len(), "lengths differ");
+        let mut groups: HashSet<&str> = group_by.iter().map(|x| *x).unique().collect();
+        if let Some(select) = selections {
+            groups.retain(|x| select.contains(x));
+        }
+        std::fs::create_dir_all(&dir)
+            .with_context(|| format!("cannot create directory: {}", dir.as_ref().display()))?;
+        let files = groups
+            .into_iter()
+            .map(|x| {
+                let filename = prefix.to_string() + x + ".bin";
+                if !sanitize_filename::is_sanitized(&filename) {
+                    bail!("invalid filename: {}", filename);
+                }
+                let filename = dir.as_ref().join(filename);
+                let writer = bed_utils::extsort::ExternalChunkBuilder::new(
+                    OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(&filename)?,
+                    3,
+                )?;
+                Ok((x, Arc::new(Mutex::new(writer))))
+            })
+            .collect::<Result<HashMap<_, _>>>()?;
+
+        let style = ProgressStyle::with_template(
+            "[{elapsed}] {bar:40.cyan/blue} {pos:>7}/{len:7} (eta: {eta})",
+        )?;
+        let mut fragment_data = self.get_fragment_iter(1000)?;
+        if let Some(min_len) = min_fragment_length {
+            fragment_data = fragment_data.min_fragment_size(min_len);
+        }
+        if let Some(max_len) = max_fragment_length {
+            fragment_data = fragment_data.max_fragment_size(max_len);
+        }
+
+        fragment_data
+            .into_fragment_groups(|i| group_by[i])
+            .progress_with_style(style)
+            .try_for_each(|group| {
+                group.into_par_iter().try_for_each(|(k, frags)| {
+                    if let Some(fl) = files.get(k) {
+                        let mut fl = fl.lock().unwrap();
+                        frags.into_iter().try_for_each(|(i, mut f)| {
+                            if let Some(barcodes) = barcodes {
+                                f.set_barcode(Some(barcodes[i]));
+                            }
+                            fl.add(f)
+                        })?;
+                    }
+                    anyhow::Ok(())
+                })
+            })?;
+        Ok(files
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    k.to_string(),
+                    Arc::into_inner(v)
+                        .unwrap()
+                        .into_inner()
+                        .unwrap()
+                        .finish()
+                        .unwrap(),
+                )
+            })
             .collect())
     }
 
@@ -148,7 +232,7 @@ pub trait Exporter: SnapData {
         };
 
         info!("Exporting fragments...");
-        let fragment_files = self.export_fragments(
+        let fragment_files = self.export_serialized_fragments(
             None,
             group_by,
             selections,
@@ -156,9 +240,6 @@ pub trait Exporter: SnapData {
             max_fragment_length,
             temp_dir.path(),
             "",
-            ".zst",
-            Some(Compression::Zstd),
-            Some(1),
         )?;
 
         info!("Computing coverage...");
@@ -178,20 +259,17 @@ pub trait Exporter: SnapData {
                 .into_iter()
                 .collect::<Vec<_>>()
                 .into_par_iter()
-                .map(|(grp, filename)| {
+                .map(|(grp, chunk)| {
                     let output = dir
                         .as_ref()
                         .join(prefix.to_string() + grp.replace("/", "+").as_str() + suffix);
 
-                    let fragments = io::Reader::new(utils::open_file_for_read(filename), None)
-                        .into_records::<Fragment>()
-                        .map(Result::unwrap);
                     let fragments: Box<dyn Iterator<Item = _>> = match counting_strategy {
                         CountingStrategy::Fragment => {
-                            Box::new(fragments.map(|x| x.to_genomic_range()))
+                            Box::new(chunk.map(|x| x.unwrap().to_genomic_range()))
                         }
                         CountingStrategy::Insertion => {
-                            Box::new(fragments.flat_map(|x| x.to_insertions()))
+                            Box::new(chunk.flat_map(|x| x.unwrap().to_insertions()))
                         }
                         _ => todo!(),
                     };
@@ -476,19 +554,21 @@ fn fit_to_bin<B: BEDLike>(x: &mut B, bin_size: u64) {
 
 #[cfg(test)]
 mod tests {
+    use crate::preprocessing::PairRead;
+
     use super::*;
 
     #[test]
     fn test_bedgraph1() {
         let fragments: Vec<Fragment> = vec![
-            Fragment::new("chr1", 0, 10),
-            Fragment::new("chr1", 3, 13),
-            Fragment::new("chr1", 5, 41),
-            Fragment::new("chr1", 8, 18),
-            Fragment::new("chr1", 15, 25),
-            Fragment::new("chr1", 22, 24),
-            Fragment::new("chr1", 23, 33),
-            Fragment::new("chr1", 29, 40),
+            PairRead::new("chr1", 0, 10).into(),
+            PairRead::new("chr1", 3, 13).into(),
+            PairRead::new("chr1", 5, 41).into(),
+            PairRead::new("chr1", 8, 18).into(),
+            PairRead::new("chr1", 15, 25).into(),
+            PairRead::new("chr1", 22, 24).into(),
+            PairRead::new("chr1", 23, 33).into(),
+            PairRead::new("chr1", 29, 40).into(),
         ];
         let genome: ChromSizes = [("chr1", 50)].into_iter().collect();
 
@@ -529,7 +609,10 @@ mod tests {
     fn test_bedgraph2() {
         let reader = crate::utils::open_file_for_read("test/fragments.tsv.gz");
         let mut reader = bed_utils::bed::io::Reader::new(reader, None);
-        let fragments: Vec<Fragment> = reader.records().map(|x| x.unwrap()).collect();
+        let fragments: Vec<Fragment> = reader
+            .records::<PairRead>()
+            .map(|x| x.unwrap().into())
+            .collect();
 
         let reader = crate::utils::open_file_for_read("test/coverage.bdg.gz");
         let mut reader = bed_utils::bed::io::Reader::new(reader, None);

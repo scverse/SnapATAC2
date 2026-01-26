@@ -1,9 +1,9 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use bed_utils::bed::{map::GIntervalMap, BEDLike, GenomicRange, ParseError, Strand};
-use bincode::{Decode, Encode};
+use bitcode::{Decode, Encode};
 use ndarray::Array2;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{HashMap, HashSet},
     io::{BufRead, BufReader, Read},
@@ -34,7 +34,7 @@ pub trait QualityControl: SnapData {
             data.for_each(|(k, v)| *counts.entry(k).or_insert(0.0) += v);
             counts
         }
-        
+
         fn mean(data: impl Iterator<Item = (String, f32)>) -> HashMap<String, f32> {
             let mut counts = HashMap::new();
             let mut n = HashMap::new();
@@ -201,10 +201,168 @@ pub trait QualityControl: SnapData {
 
 impl<T: SnapData> QualityControl for T {}
 
+
+#[derive(Encode, Decode, Debug, Clone)]
+pub enum Fragment {
+    Single(SingleRead),
+    Paired(PairRead),
+}
+
+impl From<SingleRead> for Fragment {
+    fn from(read: SingleRead) -> Self {
+        Fragment::Single(read)
+    }
+}
+
+impl From<PairRead> for Fragment {
+    fn from(read: PairRead) -> Self {
+        Fragment::Paired(read)
+    }
+}
+
+impl core::fmt::Display for Fragment {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "{}\t{}\t{}\t{}\t{}",
+            self.chrom(),
+            self.start(),
+            self.end(),
+            self.name().unwrap_or("."),
+            self.count(),
+        )?;
+        if let Some(strand) = self.strand() {
+            write!(f, "\t{}", strand)?;
+        }
+        Ok(())
+    }
+}
+
+impl Fragment {
+    pub fn count(&self) -> u32 {
+        match self {
+            Fragment::Single(x) => x.count,
+            Fragment::Paired(x) => x.count,
+        }
+    }
+
+    pub fn set_barcode(&mut self, barcode: Option<&str>) {
+        match self {
+            Fragment::Single(x) => {
+                x.barcode = barcode.map(|s| s.to_string());
+            }
+            Fragment::Paired(x) => {
+                x.barcode = barcode.map(|s| s.to_string());
+            }
+        }
+    }
+
+    pub fn is_single(&self) -> bool {
+        matches!(self, Fragment::Single(_))
+    }
+
+    pub fn to_insertions(&self) -> SmallVec<[GenomicRange; 2]> {
+        match self {
+            Fragment::Single(x) => {
+                match x.strand {
+                    Strand::Forward => smallvec![GenomicRange::new(x.chrom.clone(), x.start, x.start + 1)],
+                    Strand::Reverse => smallvec![GenomicRange::new(x.chrom.clone(), x.end - 1, x.end)],
+                }
+            }
+            Fragment::Paired(x) => {
+                smallvec![
+                    GenomicRange::new(x.chrom.clone(), x.start, x.start + 1),
+                    GenomicRange::new(x.chrom.clone(), x.end - 1, x.end),
+                ]
+            },
+        }
+    }
+}
+
+impl BEDLike for Fragment {
+    fn chrom(&self) -> &str {
+        match self {
+            Fragment::Single(x) => &x.chrom,
+            Fragment::Paired(x) => &x.chrom,
+        }
+    }
+
+    fn set_chrom(&mut self, chrom: &str) -> &mut Self {
+        match self {
+            Fragment::Single(x) => {
+                x.chrom = chrom.to_string();
+            }
+            Fragment::Paired(x) => {
+                x.chrom = chrom.to_string();
+            }
+        }
+        self
+    }
+
+    fn start(&self) -> u64 {
+        match self {
+            Fragment::Single(x) => x.start,
+            Fragment::Paired(x) => x.start,
+        }
+    }
+
+    fn set_start(&mut self, start: u64) -> &mut Self {
+        match self {
+            Fragment::Single(x) => {
+                x.start = start;
+            }
+            Fragment::Paired(x) => {
+                x.start = start;
+            }
+        }
+        self
+    }
+
+    fn end(&self) -> u64 {
+        match self {
+            Fragment::Single(x) => x.end,
+            Fragment::Paired(x) => x.end,
+        }
+    }
+
+    fn set_end(&mut self, end: u64) -> &mut Self {
+        match self {
+            Fragment::Single(x) => {
+                x.end = end;
+            }
+            Fragment::Paired(x) => {
+                x.end = end;
+            }
+        }
+        self
+    }
+
+    fn name(&self) -> Option<&str> {
+        match self {
+            Fragment::Single(x) => x.barcode.as_deref(),
+            Fragment::Paired(x) => x.barcode.as_deref(),
+        }
+    }
+
+    fn score(&self) -> Option<bed_utils::bed::Score> {
+        match self {
+            Fragment::Single(x) => Some(x.count.try_into().unwrap()),
+            Fragment::Paired(x) => Some(x.count.try_into().unwrap()),
+        }
+    }
+
+    fn strand(&self) -> Option<Strand> {
+        match self {
+            Fragment::Single(x) => Some(x.strand),
+            Fragment::Paired(x) => x.strand,
+        }
+    }
+}
+
 /// Fragments from single-cell ATAC-seq experiment. Each fragment is represented
 /// by a genomic coordinate, cell barcode and a integer value.
 #[derive(Encode, Decode, Debug, Clone)]
-pub struct Fragment {
+pub struct PairRead {
     pub chrom: String,
     pub start: u64,
     pub end: u64,
@@ -213,10 +371,14 @@ pub struct Fragment {
     pub strand: Option<Strand>,
 }
 
-impl Fragment {
-    pub fn new(chrom: impl Into<String>, start: u64, end: u64) -> Self {
+impl PairRead {
+    pub fn new(
+        chrom: &str,
+        start: u64,
+        end: u64,
+    ) -> Self {
         Self {
-            chrom: chrom.into(),
+            chrom: chrom.to_string(),
             start,
             end,
             barcode: None,
@@ -224,32 +386,9 @@ impl Fragment {
             strand: None,
         }
     }
-
-    pub fn to_insertions(&self) -> SmallVec<[GenomicRange; 2]> {
-        match self.strand {
-            None => smallvec![
-                GenomicRange::new(self.chrom.clone(), self.start, self.start + 1),
-                GenomicRange::new(self.chrom.clone(), self.end - 1, self.end),
-            ],
-            Some(Strand::Forward) => smallvec![GenomicRange::new(
-                self.chrom.clone(),
-                self.start,
-                self.start + 1
-            )],
-            Some(Strand::Reverse) => smallvec![GenomicRange::new(
-                self.chrom.clone(),
-                self.end - 1,
-                self.end
-            )],
-        }
-    }
-
-    pub fn is_single(&self) -> bool {
-        self.strand.is_some()
-    }
 }
 
-impl BEDLike for Fragment {
+impl BEDLike for PairRead {
     fn chrom(&self) -> &str {
         &self.chrom
     }
@@ -282,7 +421,7 @@ impl BEDLike for Fragment {
     }
 }
 
-impl core::fmt::Display for Fragment {
+impl core::fmt::Display for PairRead {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
@@ -300,7 +439,7 @@ impl core::fmt::Display for Fragment {
     }
 }
 
-impl std::str::FromStr for Fragment {
+impl std::str::FromStr for PairRead {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -338,7 +477,96 @@ impl std::str::FromStr for Fragment {
                 s.parse().map(Some).map_err(ParseError::InvalidStrand)
             }
         })?;
-        Ok(Fragment {
+        Ok(PairRead {
+            chrom,
+            start,
+            end,
+            barcode,
+            count,
+            strand,
+        })
+    }
+}
+
+/// Single-ended reads from single-cell ATAC-seq experiment.
+#[derive(Encode, Decode, Debug, Clone)]
+pub struct SingleRead {
+    pub chrom: String,
+    pub start: u64,
+    pub end: u64,
+    pub barcode: Option<CellBarcode>,
+    pub count: u32,
+    pub strand: Strand,
+}
+
+impl BEDLike for SingleRead {
+    fn chrom(&self) -> &str {
+        &self.chrom
+    }
+    fn set_chrom(&mut self, chrom: &str) -> &mut Self {
+        self.chrom = chrom.to_string();
+        self
+    }
+    fn start(&self) -> u64 {
+        self.start
+    }
+    fn set_start(&mut self, start: u64) -> &mut Self {
+        self.start = start;
+        self
+    }
+    fn end(&self) -> u64 {
+        self.end
+    }
+    fn set_end(&mut self, end: u64) -> &mut Self {
+        self.end = end;
+        self
+    }
+    fn name(&self) -> Option<&str> {
+        self.barcode.as_deref()
+    }
+    fn score(&self) -> Option<bed_utils::bed::Score> {
+        Some(self.count.try_into().unwrap())
+    }
+    fn strand(&self) -> Option<Strand> {
+        Some(self.strand)
+    }
+}
+
+impl std::str::FromStr for SingleRead {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut fields = s.split('\t');
+        let chrom = fields
+            .next()
+            .ok_or(ParseError::MissingReferenceSequenceName)?
+            .to_string();
+        let start = fields
+            .next()
+            .ok_or(ParseError::MissingStartPosition)
+            .and_then(|s| lexical::parse(s).map_err(ParseError::InvalidStartPosition))?;
+        let end = fields
+            .next()
+            .ok_or(ParseError::MissingEndPosition)
+            .and_then(|s| lexical::parse(s).map_err(ParseError::InvalidEndPosition))?;
+        let barcode = fields
+            .next()
+            .ok_or(ParseError::MissingName)
+            .map(|s| match s {
+                "." => None,
+                _ => Some(s.into()),
+            })?;
+        let count = fields.next().map_or(Ok(1), |s| {
+            if s == "." {
+                Ok(1)
+            } else {
+                lexical::parse(s).map_err(ParseError::InvalidStartPosition)
+            }
+        })?;
+        let strand = fields.next().ok_or(ParseError::MissingStrand).and_then(|s| {
+            s.parse().map_err(ParseError::InvalidStrand)
+        })?;
+        Ok(SingleRead {
             chrom,
             start,
             end,
@@ -443,8 +671,8 @@ impl<'a> FragmentQCBuilder<'a> {
     }
 
     pub(crate) fn update(&mut self, fragment: &Fragment) {
-        self.num_total_fragment += fragment.count as u64;
-        if self.mitochondrial_dna.contains(fragment.chrom.as_str()) {
+        self.num_total_fragment += fragment.count() as u64;
+        if self.mitochondrial_dna.contains(fragment.chrom()) {
             self.num_mitochondrial += 1;
         } else {
             self.num_unique_fragment += 1;
@@ -557,7 +785,7 @@ where
 {
     let mut barcodes = HashMap::new();
     fragments.for_each(|frag| {
-        let key = frag.barcode.unwrap().clone();
+        let key = frag.name().unwrap().to_string();
         *barcodes.entry(key).or_insert(0) += 1;
     });
     barcodes

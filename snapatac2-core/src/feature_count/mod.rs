@@ -1,16 +1,22 @@
-mod matrix;
+pub mod aggregator;
 mod counter;
 mod data_iter;
-pub mod aggregator;
+mod matrix;
 
 use std::str::FromStr;
 
+use anndata::{
+    data::DynCsrMatrix, AnnData, AnnDataOp, AnnDataSet, ArrayElemOp, AxisArraysOp, Backend,
+    ElemCollectionOp,
+};
 use anyhow::{bail, Context, Result};
-use anndata::{AnnData, AnnDataOp, AnnDataSet, ArrayElemOp, AxisArraysOp, Backend, ElemCollectionOp, data::DynCsrMatrix};
 use bed_utils::bed::GenomicRange;
-pub use data_iter::{ValueType, BaseValue, ChromValueIter, BaseData, FragmentData, ContactData, CompressedFragmentIter};
-pub use counter::{FeatureCounter, CountingStrategy};
-pub use matrix::{create_gene_matrix, create_tile_matrix, create_peak_matrix};
+pub use counter::{CountingStrategy, FeatureCounter};
+pub use data_iter::{
+    BaseData, BaseValue, ChromValueIter, CompressedFragmentIter, ContactData, FragmentData,
+    ValueType,
+};
+pub use matrix::{create_gene_matrix, create_peak_matrix, create_tile_matrix};
 use num::integer::div_ceil;
 use polars::frame::DataFrame;
 
@@ -33,7 +39,10 @@ pub trait SnapData: AnnDataOp {
     fn get_fragment_iter(&self, chunk_size: usize) -> Result<FragmentData>;
 
     /// Read base values stored in the `.obsm` matrix.
-    fn get_base_iter(&self, chunk_size: usize) -> Result<BaseData<impl ExactSizeIterator<Item = (DynCsrMatrix, usize, usize)>>>;
+    fn get_base_iter(
+        &self,
+        chunk_size: usize,
+    ) -> Result<BaseData<impl ExactSizeIterator<Item = (DynCsrMatrix, usize, usize)>>>;
 
     /// Read counts stored in the `X` matrix.
     fn read_chrom_values(
@@ -78,19 +87,25 @@ pub trait SnapData: AnnDataOp {
 impl<B: Backend> SnapData for AnnData<B> {
     fn get_fragment_iter(&self, chunk_size: usize) -> Result<FragmentData> {
         let obsm = self.obsm();
-        let matrices: CompressedFragmentIter = if let Some(insertion) =
-            obsm.get_item_iter(FRAGMENT_SINGLE, chunk_size)
-        {
-            CompressedFragmentIter::FragmentSingle(Box::new(insertion))
-        } else if let Some(fragment) = obsm.get_item_iter(FRAGMENT_PAIRED, chunk_size) {
-            CompressedFragmentIter::FragmentPaired(Box::new(fragment))
-        } else {
-            bail!("one of the following keys must be present in the '.obsm': '{}', '{}'", FRAGMENT_SINGLE, FRAGMENT_PAIRED)
-        };
+        let matrices: CompressedFragmentIter =
+            if let Some(insertion) = obsm.get_item_iter(FRAGMENT_SINGLE, chunk_size) {
+                CompressedFragmentIter::FragmentSingle(Box::new(insertion))
+            } else if let Some(fragment) = obsm.get_item_iter(FRAGMENT_PAIRED, chunk_size) {
+                CompressedFragmentIter::FragmentPaired(Box::new(fragment))
+            } else {
+                bail!(
+                    "one of the following keys must be present in the '.obsm': '{}', '{}'",
+                    FRAGMENT_SINGLE,
+                    FRAGMENT_PAIRED
+                )
+            };
         Ok(FragmentData::new(self.read_chrom_sizes()?, matrices))
     }
 
-    fn get_base_iter(&self, chunk_size: usize) -> Result<BaseData<impl ExactSizeIterator<Item = (DynCsrMatrix, usize, usize)>>> {
+    fn get_base_iter(
+        &self,
+        chunk_size: usize,
+    ) -> Result<BaseData<impl ExactSizeIterator<Item = (DynCsrMatrix, usize, usize)>>> {
         let obsm = self.obsm();
         if let Some(data) = obsm.get_item_iter(BASE_VALUE, chunk_size) {
             Ok(BaseData::new(self.read_chrom_sizes()?, data))
@@ -104,20 +119,25 @@ impl<B: Backend> SnapData for AnnDataSet<B> {
     fn get_fragment_iter(&self, chunk_size: usize) -> Result<FragmentData> {
         let adatas = self.adatas().inner();
         let obsm = adatas.get_obsm();
-        let matrices: CompressedFragmentIter = if let Some(insertion) =
-            obsm.get_item_iter(FRAGMENT_SINGLE, chunk_size)
-        {
-            CompressedFragmentIter::FragmentSingle(Box::new(insertion))
-        } else if let Some(fragment) = obsm.get_item_iter(FRAGMENT_PAIRED, chunk_size) {
-            CompressedFragmentIter::FragmentPaired(Box::new(fragment))
-        } else {
-            bail!("one of the following keys must be present in the '.obsm': '{}', '{}'", FRAGMENT_SINGLE, FRAGMENT_PAIRED)
-        };
+        let matrices: CompressedFragmentIter =
+            if let Some(insertion) = obsm.get_item_iter(FRAGMENT_SINGLE, chunk_size) {
+                CompressedFragmentIter::FragmentSingle(Box::new(insertion))
+            } else if let Some(fragment) = obsm.get_item_iter(FRAGMENT_PAIRED, chunk_size) {
+                CompressedFragmentIter::FragmentPaired(Box::new(fragment))
+            } else {
+                bail!(
+                    "one of the following keys must be present in the '.obsm': '{}', '{}'",
+                    FRAGMENT_SINGLE,
+                    FRAGMENT_PAIRED
+                )
+            };
         Ok(FragmentData::new(self.read_chrom_sizes()?, matrices))
     }
 
-    fn get_base_iter(&self, chunk_size: usize) -> Result<BaseData<impl ExactSizeIterator<Item = (DynCsrMatrix, usize, usize)>>>
-    {
+    fn get_base_iter(
+        &self,
+        chunk_size: usize,
+    ) -> Result<BaseData<impl ExactSizeIterator<Item = (DynCsrMatrix, usize, usize)>>> {
         let obsm = self.obsm();
         if let Some(data) = obsm.get_item_iter(BASE_VALUE, chunk_size) {
             Ok(BaseData::new(self.read_chrom_sizes()?, data))
