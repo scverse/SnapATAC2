@@ -257,6 +257,19 @@ fn rev_compl(dna: &str) -> String {
         .collect()
 }
 
+/* Python object for testing motif enrichment in sequences.
+
+   Examples
+   --------
+   ```python
+   import snapatac2 as snap
+   motifs = snap.read_motifs("motifs.meme")
+   background_seqs = ['AAACGTTCC', 'TTGCCAATACC']  # list of background sequences
+   target_seqs = ['ACGTAGCTAG', 'CGTACGTAGC']      # list of target sequences
+   motif_test = motif[0].with_nucl_prob().with_background(background_seqs)
+   log_fc, pval = motif_test.test(target_seqs)
+   ```
+ */
 #[pyclass]
 pub struct PyDNAMotifTest {
     scanner: PyDNAMotifScanner,

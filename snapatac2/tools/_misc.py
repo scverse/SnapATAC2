@@ -17,7 +17,7 @@ def aggregate_X(
     groupby: str | list[str] | None = None,
     normalize: Literal["RPM", "RPKM"] | None = None,
     file: Path | None = None,
-) -> np.ndarray | internal.AnnData:
+) -> internal.AnnData:
     """
     Aggregate values in adata.X in a row-wise fashion.
 
@@ -44,6 +44,14 @@ def aggregate_X(
     """
     from anndata import AnnData
 
+    def _normalize(X, size_factor = None):
+        for i in range(X.shape[0]):
+            s = X[i, :].sum()
+            if s > 0:
+                X[i, :] /= s / 1000000.0
+                if size_factor is not None:
+                    X[i, :] /= size_factor
+
     def norm(x):
         if normalize is None:
             return x
@@ -61,7 +69,7 @@ def aggregate_X(
         groups = adata.obs[groupby] if isinstance(groupby, str) else groupby
         groups = [x for x in groups]
 
-    result = internal.aggregate_x(adata, groups)
+    names, result = internal.aggregate_x(adata, groups)
     norm(result)
 
     if file is None:
@@ -70,7 +78,7 @@ def aggregate_X(
         out_adata = internal.AnnData(filename=file, X=result)
 
     if groups is not None:
-        out_adata.obs_names = list(set([x for x in groups if x is not None]))
+        out_adata.obs_names = names
     out_adata.var_names = adata.var_names
     return out_adata
 
@@ -298,16 +306,8 @@ def _hierarchical_enrichment(
         Z, list(marker_genes.values()), list(marker_genes.keys()),
     )
 
-def _normalize(X, size_factor = None):
-    for i in range(X.shape[0]):
-        s = X[i, :].sum()
-        if s > 0:
-            X[i, :] /= s / 1000000.0
-            if size_factor is not None:
-                X[i, :] /= size_factor
-
 def _get_sizes(regions):
     def size(x):
         x = x.split(':')[1].split("-")
         return int(x[1]) - int(x[0])
-    return np.array(list(size(x) for x in regions))
+    return np.array(list(size(x) for x in regions), dtype=np.float64)

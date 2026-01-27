@@ -40,8 +40,45 @@ def h5ad(dir=Path("./")):
     dir.mkdir(exist_ok=True)
     return str(dir / Path(str(uuid.uuid4()) + ".h5ad"))
 
+def test_aggregation1():
+    x = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float64)
+    x = np.concat([x] * 3333, axis=0)
 
-def test_aggregation():
+    groups = np.random.choice(["A", "B", "C", "D", "E"], size=x.shape[0])
+    var_names_len = np.random.randint(1000, 5000, size=x.shape[1])
+    var_names = [f"chr1:0-{i}" for i in var_names_len]
+
+    adata = ad.AnnData(
+        X=x,
+        obs=dict(groups=groups),
+    )
+    adata.var_names = var_names
+
+    expected = defaultdict(list)
+    for g, v in zip(groups, list(x)):
+        expected[g].append(v)
+    for k in expected.keys():
+        expected[k] = np.array(expected[k], dtype="float64").sum(axis=0)
+
+    actual = snap.tl.aggregate_X(adata, groupby=groups)
+    actual = {actual.obs_names[i]: np.ravel(actual.X[i, :]) for i in range(actual.n_obs)}
+    for k, v in expected.items():
+        np.testing.assert_array_almost_equal_nulp(v, actual[k])
+
+    actual = snap.tl.aggregate_X(adata, groupby=groups, normalize='RPM')
+    actual = {actual.obs_names[i]: np.ravel(actual.X[i, :]) for i in range(actual.n_obs)}
+    for k, v in expected.items():
+        v /= v.sum() / 1e6
+        np.testing.assert_array_almost_equal_nulp(v, actual[k])
+
+    actual = snap.tl.aggregate_X(adata, groupby=groups, normalize='RPKM')
+    actual = {actual.obs_names[i]: np.ravel(actual.X[i, :]) for i in range(actual.n_obs)}
+    for k, v in expected.items():
+        v /= v.sum() / 1e6
+        v /= (var_names_len / 1000.0)
+        np.testing.assert_array_almost_equal_nulp(v, actual[k], nulp=3)
+
+def test_aggregation2():
     x = np.random.poisson(1.0, (10_000, 50)).astype(np.float64)
     groups = np.random.choice(["A", "B", "C", "D", "E"], size=x.shape[0])
     obs_names = [str(i) for i in range(len(groups))]

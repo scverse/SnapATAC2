@@ -3,21 +3,20 @@ mod anndata;
 pub use self::anndata::AnnDataLike;
 
 use ::anndata::Backend;
-use std::ops::Deref;
 use anndata_hdf5::H5;
 use anyhow::Result;
 use bed_utils::bed::{BEDLike, MergeBed};
 use bed_utils::extsort::ExternalSorterBuilder;
 use numpy::{
-    Element, IntoPyArray, Ix1, Ix2, PyArray, PyArrayMethods, PyReadonlyArray,
-    PyReadonlyArrayDyn,
+    Element, IntoPyArray, Ix1, Ix2, PyArray, PyArrayMethods, PyReadonlyArray, PyReadonlyArrayDyn,
 };
 use pyo3::{prelude::*, types::PyIterator, PyResult, Python};
+use snapatac2_core::feature_count::aggregator;
 use snapatac2_core::genome::{
     read_transcripts_from_gff, read_transcripts_from_gtf, Transcript, TranscriptParserOptions,
 };
 use snapatac2_core::utils;
-use snapatac2_core::feature_count::aggregator;
+use std::ops::Deref;
 
 use bed_utils::{bed, bed::GenomicRange, bed::BED};
 use linreg::lin_reg_imprecise;
@@ -31,11 +30,12 @@ pub fn aggregate_x<'py>(
     py: Python<'py>,
     anndata: AnnDataLike,
     groupby: Option<Vec<Option<String>>>,
-) -> Bound<'py, PyArray<f64, Ix2>> {
+) -> (Option<Vec<String>>, Bound<'py, PyArray<f64, Ix2>>) {
     macro_rules! run {
-        ($data:expr) => {
-            aggregator::aggregate_x(&$data, groupby.as_deref()).unwrap().into_pyarray(py)
-        };
+        ($data:expr) => {{
+            let (names, mat) = aggregator::aggregate_x(&$data, groupby.as_deref()).unwrap();
+            (names, mat.into_pyarray(py))
+        }};
     }
 
     crate::with_anndata!(&anndata, run)
@@ -429,6 +429,5 @@ pub(crate) fn total_size_of_peaks(peaks: Vec<String>) -> Result<u64> {
         .map(|x| x.unwrap())
         .merge_sorted_bed()
         .map(|x| x.len())
-        .sum()
-    )
+        .sum())
 }

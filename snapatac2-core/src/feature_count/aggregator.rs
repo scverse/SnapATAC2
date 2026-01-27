@@ -7,7 +7,7 @@ use ndarray::Array2;
 pub fn aggregate_x<A: AnnDataOp>(
     adata: &A,
     groupby: Option<&[Option<String>]>,
-) -> Result<Array2<f64>> {
+) -> Result<(Option<Vec<String>>, Array2<f64>)> {
     let n_vars = adata.n_vars();
     if let Some(groupby) = groupby {
         ensure!(
@@ -49,7 +49,7 @@ pub fn aggregate_x<A: AnnDataOp>(
                 }
                 _ => panic!("Unsupported array data type"),
             });
-        Ok(result)
+        Ok((Some(groups.into_iter().collect()), result))
     } else {
         let mut result = vec![0.0; n_vars];
         adata
@@ -77,6 +77,6 @@ pub fn aggregate_x<A: AnnDataOp>(
                 }
                 _ => panic!("Unsupported array data type"),
             });
-        Ok(Array2::from_shape_vec((1, adata.n_vars()), result).unwrap())
+        Ok((None, Array2::from_shape_vec((1, adata.n_vars()), result).unwrap()))
     }
 }
