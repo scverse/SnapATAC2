@@ -1,0 +1,32 @@
+﻿snapatac2.PyDNAMotifScanner
+===========================
+
+.. currentmodule:: snapatac2
+
+.. autoclass:: PyDNAMotifScanner
+
+   
+   
+   .. rubric:: Attributes
+
+   .. autosummary::
+      :toctree: .
+   
+      ~snapatac2.PyDNAMotifScanner.id
+      ~snapatac2.PyDNAMotifScanner.name
+   
+   
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: .
+   
+      ~snapatac2.PyDNAMotifScanner.exist
+      ~snapatac2.PyDNAMotifScanner.exists
+      ~snapatac2.PyDNAMotifScanner.find
+      ~snapatac2.PyDNAMotifScanner.with_background
+   
+   

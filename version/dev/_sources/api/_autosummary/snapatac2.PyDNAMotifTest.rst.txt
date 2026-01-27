@@ -1,0 +1,29 @@
+﻿snapatac2.PyDNAMotifTest
+========================
+
+.. currentmodule:: snapatac2
+
+.. autoclass:: PyDNAMotifTest
+
+   
+   
+   .. rubric:: Attributes
+
+   .. autosummary::
+      :toctree: .
+   
+      ~snapatac2.PyDNAMotifTest.id
+      ~snapatac2.PyDNAMotifTest.name
+   
+   
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: .
+   
+      ~snapatac2.PyDNAMotifTest.test
+   
+   

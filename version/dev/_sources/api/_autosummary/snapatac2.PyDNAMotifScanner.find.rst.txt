@@ -1,0 +1,6 @@
+snapatac2.PyDNAMotifScanner.find
+================================
+
+.. currentmodule:: snapatac2
+
+.. automethod:: PyDNAMotifScanner.find
