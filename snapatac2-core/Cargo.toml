@@ -11,7 +11,7 @@ keywords = ["single-cell", "biology"]
 
 [dependencies]
 #anndata = "0.6.2"
-anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "5b23d8f2cddbdc2a2c12101808aaff91bbcbb838"}
+anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "ebcdb9914eaa2f1a7283481407e30026da7dd8b4"}
 anyhow = "1.0"
 bstr = "1.12"
 byteorder = "1.5"

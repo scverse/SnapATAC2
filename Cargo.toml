@@ -20,11 +20,11 @@ snapatac2-core = { path = "snapatac2-core" }
 [dependencies]
 snapatac2-core = { workspace = true }
 #anndata = "0.6.2"
-anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "5b23d8f2cddbdc2a2c12101808aaff91bbcbb838"}
+anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "ebcdb9914eaa2f1a7283481407e30026da7dd8b4"}
 #anndata-hdf5 = "0.5.2"
-anndata-hdf5 = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "5b23d8f2cddbdc2a2c12101808aaff91bbcbb838"}
+anndata-hdf5 = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "ebcdb9914eaa2f1a7283481407e30026da7dd8b4"}
 #pyanndata = "0.6"
-pyanndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "5b23d8f2cddbdc2a2c12101808aaff91bbcbb838"}
+pyanndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "ebcdb9914eaa2f1a7283481407e30026da7dd8b4"}
 anyhow = "1.0"
 bed-utils = "0.10.1"
 flate2 = "1.0"

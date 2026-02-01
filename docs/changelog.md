@@ -14,8 +14,7 @@
 ### Breaking Changes:
 
   - `pp.import_data` is removed in favor of `pp.import_fragments`.
-  - h5ad files are compressed using zstandard by default as this results in smaller file sizes and faster read/write speeds.
-    hdf5plugin is needed to read/write these files if using the anndata python package.
+  - h5ad files are compressed using zstandard by default as this results in smaller file sizes and faster read/write speeds. hdf5plugin is needed to read/write these files if using the anndata python package. You can change the default compression settings using `snapatac2.set_write_options` and `snapatac2.get_write_options`.
   - `pp.import_fragments` now treats fragment files as paired-end by default. To import single-end data, set `is_paired=False`.
   - Removes `shift_left` and `shift_right` parameters from `pp.import_fragments`.
 

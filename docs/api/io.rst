@@ -23,3 +23,5 @@ AnnData IO
     read_10x_mtx
     read_dataset
     concat
+    get_write_options
+    set_write_options
