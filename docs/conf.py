@@ -100,6 +100,33 @@ intersphinx_mapping = {
     "scanpy": ("https://scanpy.readthedocs.io/en/stable/", None),
 }
 
+# Configure autodoc to handle import errors gracefully
+autodoc_mock_imports = []
+
+def resolve_py_module(name):
+    """Resolve Python module aliases used in documentation."""
+    import sys
+    if name == 'pl':
+        return sys.modules.get('snapatac2.plotting')
+    elif name == 'tl':
+        return sys.modules.get('snapatac2.tools')
+    elif name == 'pp':
+        return sys.modules.get('snapatac2.preprocessing')
+    elif name == 'ex':
+        return sys.modules.get('snapatac2.export')
+    return None
+
+def setup(app):
+    """Configure Sphinx application."""
+    # Register the aliases in sys.modules for Sphinx to find them
+    import snapatac2
+    import sys
+    
+    sys.modules['snapatac2.pl'] = snapatac2.pl
+    sys.modules['snapatac2.tl'] = snapatac2.tl
+    sys.modules['snapatac2.pp'] = snapatac2.pp
+    sys.modules['snapatac2.ex'] = snapatac2.ex
+
 smv_branch_whitelist = r'main'  # Include all branches
 
 # Add any paths that contain templates here, relative to this directory.
@@ -124,7 +151,7 @@ html_css_files = [
 html_theme_options = {
     "logo": {
         "text": "SnapATAC2",
-        "image_dark": "_static/logo-dark.svg",
+        #"image_dark": "_static/logo-dark.svg",
         "alt_text": "SnapATAC2",
     },
 
