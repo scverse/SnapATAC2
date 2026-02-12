@@ -86,7 +86,7 @@ fn spectral_mf(
         .for_each(|(mut row, d)| row.values_mut().iter_mut().for_each(|x| *x *= d.sqrt()));
 
     // Compute eigenvalues and eigenvectors
-    let (v, u) = Python::with_gil(|py| {
+    let (v, u) = Python::attach(|py| {
         let fun: Py<PyAny> = PyModule::from_code(
             py,
             c_str!(
@@ -568,7 +568,7 @@ pub(crate) fn multi_spectral_embedding<'py>(
 }
 
 fn frobenius_norm(x: &CsrMatrix<f64>) -> f64 {
-    let sum: f64 = Python::with_gil(|py| {
+    let sum: f64 = Python::attach(|py| {
         let fun: Py<PyAny> = PyModule::from_code(
             py,
             c_str!(

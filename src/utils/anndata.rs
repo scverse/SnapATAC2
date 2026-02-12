@@ -16,8 +16,10 @@ use snapatac2_core::{
 
 pub struct PyAnnData<'py>(memory::PyAnnData<'py>);
 
-impl<'py> FromPyObject<'py> for PyAnnData<'py> {
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'py> FromPyObject<'_, 'py> for PyAnnData<'py> {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
         ob.extract().map(PyAnnData)
     }
 }

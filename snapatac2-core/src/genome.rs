@@ -197,7 +197,7 @@ impl ChromSizes {
     }
 
     pub fn to_dataframe(&self) -> DataFrame {
-        DataFrame::new(vec![
+        DataFrame::new_infer_height(vec![
             Column::new(
                 "reference_seq_name".into(),
                 self.0.iter().map(|x| x.0.clone()).collect::<Series>(),

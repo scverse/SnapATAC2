@@ -290,7 +290,7 @@ where
         adata_out.set_obs_names(adata.obs_names())?;
         adata_out.set_var_names(ids.into())?;
         if let Some(gene_names) = gene_names {
-            adata_out.set_var(DataFrame::new(vec![Column::new(
+            adata_out.set_var(DataFrame::new_infer_height(vec![Column::new(
                 "gene_name".into(),
                 gene_names,
             )])?)?;
@@ -299,7 +299,7 @@ where
         adata.set_x_from_iter(data)?;
         adata.set_var_names(ids.into())?;
         if let Some(gene_names) = gene_names {
-            adata.set_var(DataFrame::new(vec![Column::new(
+            adata.set_var(DataFrame::new_infer_height(vec![Column::new(
                 "gene_name".into(),
                 gene_names,
             )])?)?;

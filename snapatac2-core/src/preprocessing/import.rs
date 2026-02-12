@@ -217,7 +217,7 @@ where
 }
 
 fn qc_to_df(qc: Vec<FragmentQC>) -> DataFrame {
-    DataFrame::new(vec![
+    DataFrame::new_infer_height(vec![
         Column::new(
             "n_fragment".into(),
             qc.iter().map(|x| x.num_unique_fragment).collect::<Series>(),
@@ -305,7 +305,7 @@ where
 
     anndata.uns().add(
         "reference_sequences",
-        DataFrame::new(vec![
+        DataFrame::new_infer_height(vec![
             Column::new(
                 "reference_seq_name".into(),
                 regions.iter().map(|x| x.chrom()).collect::<Series>(),
@@ -411,7 +411,7 @@ where
         .uns()
         .add("reference_sequences", chrom_sizes.to_dataframe())?;
     anndata.set_obs_names(scanned_barcodes.into_iter().collect())?;
-    anndata.set_obs(DataFrame::new(vec![Column::new(
+    anndata.set_obs(DataFrame::new_infer_height(vec![Column::new(
         "num_values".into(),
         qc_metrics.iter().map(|x| x.num_values).collect::<Series>(),
     )])?)?;

@@ -154,7 +154,7 @@ pub(crate) fn pearson<'py>(
     py: Python<'py>,
     mat: &Bound<'py, PyAny>,
     other: &Bound<'py, PyAny>,
-) -> Result<Bound<'py, PyAny>> {
+) -> PyResult<Bound<'py, PyAny>> {
     match mat.getattr("dtype")?.getattr("name")?.extract()? {
         "float32" => {
             let mat_ = mat.extract::<PyReadonlyArray<f32, Ix2>>()?.to_owned_array();
@@ -183,7 +183,7 @@ pub(crate) fn spearman<'py>(
     py: Python<'py>,
     mat: &Bound<'py, PyAny>,
     other: &Bound<'py, PyAny>,
-) -> Result<Bound<'py, PyAny>> {
+) -> PyResult<Bound<'py, PyAny>> {
     match mat.getattr("dtype")?.getattr("name")?.extract()? {
         "float32" => {
             let mat_ = mat.extract::<PyReadonlyArray<f32, Ix2>>()?.to_owned_array();
@@ -245,32 +245,32 @@ fn cast_pyarray<'py, T: Element>(arr: &Bound<'py, PyAny>) -> PyResult<Vec<T>> {
     let vec = match arr.getattr("dtype")?.getattr("name")?.extract()? {
         "uint32" => arr
             .extract::<PyReadonlyArrayDyn<u32>>()?
-            .cast(false)?
+            .cast_array(false)?
             .to_vec()
             .unwrap(),
         "int32" => arr
             .extract::<PyReadonlyArrayDyn<i32>>()?
-            .cast(false)?
+            .cast_array(false)?
             .to_vec()
             .unwrap(),
         "uint64" => arr
             .extract::<PyReadonlyArrayDyn<u64>>()?
-            .cast(false)?
+            .cast_array(false)?
             .to_vec()
             .unwrap(),
         "int64" => arr
             .extract::<PyReadonlyArrayDyn<i64>>()?
-            .cast(false)?
+            .cast_array(false)?
             .to_vec()
             .unwrap(),
         "float32" => arr
             .extract::<PyReadonlyArrayDyn<f32>>()?
-            .cast(false)?
+            .cast_array(false)?
             .to_vec()
             .unwrap(),
         "float64" => arr
             .extract::<PyReadonlyArrayDyn<f64>>()?
-            .cast(false)?
+            .cast_array(false)?
             .to_vec()
             .unwrap(),
         ty => panic!("cannot cast type {}", ty),
@@ -308,7 +308,7 @@ pub(crate) fn jm_regress(
 /// - file-like object
 /// - list of strings
 pub(crate) fn read_genomic_ranges(input: &Bound<'_, PyAny>) -> Result<Vec<GenomicRange>> {
-    if let Ok(list) = input.downcast::<pyo3::types::PyList>() {
+    if let Ok(list) = input.cast::<pyo3::types::PyList>() {
         list.iter()
             .map(|str| {
                 let str: &str = str.extract()?;

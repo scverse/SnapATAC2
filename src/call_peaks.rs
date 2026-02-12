@@ -68,7 +68,7 @@ pub fn py_merge_peaks<'py>(
         });
         Column::new(key.into(), values)
     });
-    Ok(PyDataFrame(DataFrame::new(
+    Ok(PyDataFrame(DataFrame::new_infer_height(
         std::iter::once(peaks_str).chain(iter).collect(),
     )?))
 }
@@ -216,7 +216,7 @@ fn narrow_peak_to_dataframe<I: IntoIterator<Item = NarrowPeak>>(
     }
 
     // Create a DataFrame from the collected Vecs
-    let df = DataFrame::new(vec![
+    let df = DataFrame::new_infer_height(vec![
         Column::new("chrom".into(), chroms),
         Column::new("start".into(), starts),
         Column::new("end".into(), ends),
@@ -257,7 +257,7 @@ fn broad_peak_to_dataframe<I: IntoIterator<Item = BroadPeak>>(peaks: I) -> Resul
     }
 
     // Create a DataFrame from the collected Vecs
-    let df = DataFrame::new(vec![
+    let df = DataFrame::new_infer_height(vec![
         Column::new("chrom".into(), chroms),
         Column::new("start".into(), starts),
         Column::new("end".into(), ends),
@@ -275,13 +275,13 @@ fn broad_peak_to_dataframe<I: IntoIterator<Item = BroadPeak>>(peaks: I) -> Resul
 fn get_genomic_ranges<'py>(peak_io_obj: &Bound<'py, PyAny>) -> Result<Vec<GenomicRange>> {
     peak_io_obj
         .getattr("peaks")?
-        .downcast::<pyo3::types::PyDict>()
+        .cast::<pyo3::types::PyDict>()
         .unwrap()
         .iter()
         .flat_map(|(chr, peaks)| {
             let chrom = String::from_utf8(chr.extract().unwrap()).unwrap();
             peaks
-                .downcast::<pyo3::types::PyList>()
+                .cast::<pyo3::types::PyList>()
                 .unwrap()
                 .iter()
                 .map(|peak| {
@@ -297,13 +297,13 @@ fn get_genomic_ranges<'py>(peak_io_obj: &Bound<'py, PyAny>) -> Result<Vec<Genomi
 fn get_narrow_peaks<'py>(peak_io_obj: &Bound<'py, PyAny>) -> Result<Vec<NarrowPeak>> {
     peak_io_obj
         .getattr("peaks")?
-        .downcast::<pyo3::types::PyDict>()
+        .cast::<pyo3::types::PyDict>()
         .unwrap()
         .iter()
         .flat_map(|(chr, peaks)| {
             let chrom = String::from_utf8(chr.extract().unwrap()).unwrap();
             peaks
-                .downcast::<pyo3::types::PyList>()
+                .cast::<pyo3::types::PyList>()
                 .unwrap()
                 .iter()
                 .map(|peak| {
@@ -335,13 +335,13 @@ fn get_narrow_peaks<'py>(peak_io_obj: &Bound<'py, PyAny>) -> Result<Vec<NarrowPe
 fn get_broad_peaks<'py>(peak_io_obj: &Bound<'py, PyAny>) -> Result<Vec<BroadPeak>> {
     peak_io_obj
         .getattr("peaks")?
-        .downcast::<pyo3::types::PyDict>()
+        .cast::<pyo3::types::PyDict>()
         .unwrap()
         .iter()
         .flat_map(|(chr, peaks)| {
             let chrom = String::from_utf8(chr.extract().unwrap()).unwrap();
             peaks
-                .downcast::<pyo3::types::PyList>()
+                .cast::<pyo3::types::PyList>()
                 .unwrap()
                 .iter()
                 .map(|peak| {

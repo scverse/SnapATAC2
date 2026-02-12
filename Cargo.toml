@@ -20,11 +20,11 @@ snapatac2-core = { path = "snapatac2-core" }
 [dependencies]
 snapatac2-core = { workspace = true }
 #anndata = "0.6.2"
-anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "ebcdb9914eaa2f1a7283481407e30026da7dd8b4"}
+anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "cf0b312f2834884bd708595a63f12f34f1905b7b"}
 #anndata-hdf5 = "0.5.2"
-anndata-hdf5 = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "ebcdb9914eaa2f1a7283481407e30026da7dd8b4"}
+anndata-hdf5 = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "cf0b312f2834884bd708595a63f12f34f1905b7b"}
 #pyanndata = "0.6"
-pyanndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "ebcdb9914eaa2f1a7283481407e30026da7dd8b4"}
+pyanndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "cf0b312f2834884bd708595a63f12f34f1905b7b"}
 anyhow = "1.0"
 bed-utils = "0.10.1"
 flate2 = "1.0"
@@ -33,14 +33,14 @@ indicatif = "0.18"
 linreg = "0.2"
 log = "0.4"
 noodles = { version = "0.104", features = ["bam", "sam"] }
-numpy = "0.25"
+numpy = "0.27"
 num = "0.4"
 nalgebra-sparse = "0.11"
 nalgebra = "0.34"
-ndarray = "0.16"
-polars = { version = "0.51", features = ["ndarray", "dtype-categorical"] }
-pyo3-log = "0.12"
-pyo3-polars = "0.24"
+ndarray = "0.17"
+polars = { version = "0.53", features = ["ndarray", "dtype-categorical"] }
+pyo3-log = "0.13"
+pyo3-polars = "0.26"
 rand = "0.9"
 rayon = "1.11"
 statrs = "0.18"
@@ -52,7 +52,7 @@ zstd = { version = "0.13", features = ["zstdmt"] }
 tikv-jemallocator = {version = "0.6", features = ["disable_initial_exec_tls"]}
 
 [dependencies.pyo3]
-version = "0.25"
+version = "0.27"
 features = ["extension-module", "anyhow"]
 
 [lib]
