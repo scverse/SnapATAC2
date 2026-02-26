@@ -1,0 +1,6 @@
+﻿snapatac2.read\_motifs
+======================
+
+.. currentmodule:: snapatac2
+
+.. autofunction:: read_motifs

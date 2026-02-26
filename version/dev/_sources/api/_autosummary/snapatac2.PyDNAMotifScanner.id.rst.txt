@@ -1,0 +1,6 @@
+snapatac2.PyDNAMotifScanner.id
+==============================
+
+.. currentmodule:: snapatac2
+
+.. autoattribute:: PyDNAMotifScanner.id
