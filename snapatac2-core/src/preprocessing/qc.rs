@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 use bed_utils::bed::{map::GIntervalMap, BEDLike, GenomicRange, ParseError, Strand};
-use bitcode::{Decode, Encode};
+use bincode_next::{Decode, Encode};
 use ndarray::Array2;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use smallvec::{SmallVec, smallvec};
