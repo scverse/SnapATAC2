@@ -2,6 +2,8 @@
 
 ## Nightly (unreleased)
 
+## Release 2.9.0 (released March 05, 2026)
+
 ### Features:
 
   - Support python 3.13 and 3.14.
