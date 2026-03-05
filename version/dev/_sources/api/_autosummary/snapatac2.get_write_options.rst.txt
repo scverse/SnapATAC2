@@ -1,0 +1,6 @@
+﻿snapatac2.get\_write\_options
+=============================
+
+.. currentmodule:: snapatac2
+
+.. autofunction:: get_write_options

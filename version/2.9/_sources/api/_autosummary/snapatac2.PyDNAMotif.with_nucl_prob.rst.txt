@@ -1,0 +1,6 @@
+snapatac2.PyDNAMotif.with\_nucl\_prob
+=====================================
+
+.. currentmodule:: snapatac2
+
+.. automethod:: PyDNAMotif.with_nucl_prob
