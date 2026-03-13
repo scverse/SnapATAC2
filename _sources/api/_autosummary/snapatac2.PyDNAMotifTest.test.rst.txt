@@ -1,0 +1,6 @@
+snapatac2.PyDNAMotifTest.test
+=============================
+
+.. currentmodule:: snapatac2
+
+.. automethod:: PyDNAMotifTest.test

@@ -1,0 +1,49 @@
+﻿snapatac2.AnnDataSet
+====================
+
+.. currentmodule:: snapatac2
+
+.. autoclass:: AnnDataSet
+
+   
+   
+   .. rubric:: Attributes
+
+   .. autosummary::
+      :toctree: .
+   
+      ~AnnDataSet.X
+      ~AnnDataSet.adatas
+      ~AnnDataSet.backend
+      ~AnnDataSet.isbacked
+      ~AnnDataSet.n_obs
+      ~AnnDataSet.n_vars
+      ~AnnDataSet.obs
+      ~AnnDataSet.obs_names
+      ~AnnDataSet.obsm
+      ~AnnDataSet.obsp
+      ~AnnDataSet.shape
+      ~AnnDataSet.uns
+      ~AnnDataSet.var
+      ~AnnDataSet.var_names
+      ~AnnDataSet.varm
+      ~AnnDataSet.varp
+   
+   
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree: .
+   
+      ~AnnDataSet.chunked_X
+      ~AnnDataSet.close
+      ~AnnDataSet.is_closed
+      ~AnnDataSet.obs_ix
+      ~AnnDataSet.split_obs_by
+      ~AnnDataSet.to_adata
+      ~AnnDataSet.var_ix
+   
+   

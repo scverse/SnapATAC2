@@ -1,0 +1,6 @@
+snapatac2.PyDNAMotif.family
+===========================
+
+.. currentmodule:: snapatac2
+
+.. autoattribute:: PyDNAMotif.family
