@@ -26,7 +26,7 @@ anndata-hdf5 = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "cf0b
 #pyanndata = "0.6"
 pyanndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "cf0b312f2834884bd708595a63f12f34f1905b7b"}
 anyhow = "1.0"
-bed-utils = "0.10.2"
+bed-utils = "0.11"
 flate2 = "1.0"
 itertools = "0.14"
 indicatif = "0.18"

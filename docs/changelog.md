@@ -2,7 +2,7 @@
 
 ## Nightly (unreleased)
 
-## Release 2.9.0 (released March 05, 2026)
+## Release 2.9.0 (released March 13, 2026)
 
 ### Features:
 

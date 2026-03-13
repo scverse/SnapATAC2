@@ -1,5 +1,5 @@
-use bincode_next::{Decode, Encode};
 use noodles::{bam::Record, sam::alignment::record::{Cigar, Flags, cigar::op::Kind}};
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use std::collections::{HashMap, HashSet};
 use anyhow::{Result, Context};
 use itertools::Itertools;
@@ -209,7 +209,7 @@ impl BamQC {
 }
 
 /// Minimal information about an alignment extracted from the BAM record.
-#[derive(Encode, Decode, Debug)]
+#[derive(Archive, RkyvSerialize, RkyvDeserialize, Debug)]
 pub struct AlignmentInfo {
     pub name: String,
     pub reference_sequence_id: u32,

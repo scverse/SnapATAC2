@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use bed_utils::bed::{map::GIntervalMap, BEDLike, GenomicRange, ParseError, Strand};
-use bincode_next::{Decode, Encode};
 use ndarray::Array2;
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use smallvec::{SmallVec, smallvec};
 use std::{
@@ -202,7 +202,7 @@ pub trait QualityControl: SnapData {
 impl<T: SnapData> QualityControl for T {}
 
 
-#[derive(Encode, Decode, Debug, Clone)]
+#[derive(Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub enum Fragment {
     Single(SingleRead),
     Paired(PairRead),
@@ -361,7 +361,7 @@ impl BEDLike for Fragment {
 
 /// Fragments from single-cell ATAC-seq experiment. Each fragment is represented
 /// by a genomic coordinate, cell barcode and a integer value.
-#[derive(Encode, Decode, Debug, Clone)]
+#[derive(Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct PairRead {
     pub chrom: String,
     pub start: u64,
@@ -489,7 +489,7 @@ impl std::str::FromStr for PairRead {
 }
 
 /// Single-ended reads from single-cell ATAC-seq experiment.
-#[derive(Encode, Decode, Debug, Clone)]
+#[derive(Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone)]
 pub struct SingleRead {
     pub chrom: String,
     pub start: u64,
@@ -578,7 +578,7 @@ impl std::str::FromStr for SingleRead {
 }
 
 /// Chromatin interactions from single-cell Hi-C experiment.
-#[derive(Encode, Decode, Debug)]
+#[derive(Archive, RkyvSerialize, RkyvDeserialize, Debug)]
 pub struct Contact {
     pub chrom1: String,
     pub start1: u64,

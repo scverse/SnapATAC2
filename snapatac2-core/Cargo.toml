@@ -15,9 +15,9 @@ anndata = { git = "https://github.com/kaizhang/anndata-rs.git", rev = "cf0b312f2
 anyhow = "1.0"
 bstr = "1.12"
 byteorder = "1.5"
-bincode-next = "3.0.0-rc.4"
 bigtools = { version = "0.5", features = ["read", "write"] }
-bed-utils = "0.10.2"
+bed-utils = "0.11"
+rkyv = "0.8"
 flate2 = "1.0"
 tokio = "1.34"
 hora = "0.1"
