@@ -63,6 +63,7 @@ def diff_test(
     direction: Literal["positive", "negative", "both"] = "both",
     min_log_fc: float = 0.25,
     min_pct: float = 0.05,
+    solver: str = "lbfgs",
 ) -> 'polars.DataFrame':
     """
     Identify differentially accessible regions.
@@ -90,7 +91,9 @@ def diff_test(
         X-fold difference (log2-scale) between the two groups of cells.
     min_pct
         Only test features that are detected in a minimum fraction of min_pct
-        cells in either of the two populations. 
+        cells in either of the two populations.
+    solver
+        Solver to use in :class:`sklearn.linear_model.LogisticRegression`.
 
     Returns
     -------
@@ -145,7 +148,7 @@ def diff_test(
     else:
         features, log_fc = zip(*filtered)
         logging.info("Testing {} features ...".format(len(features)))
-        pvals = _diff_test_helper(cell_by_peak, test_var, features, covariates)
+        pvals = _diff_test_helper(cell_by_peak, test_var, features, covariates, solver=solver)
         var_names = data.var_names
         return pl.DataFrame({
             "feature name": [var_names[i] for i in features],
@@ -190,7 +193,7 @@ def _filter_features(mat1, mat2, peak_indices, direction,
     peak_indices = [i for i in peak_indices if pass_min_pct(i)]
     return [(i, log_fc[i])  for i in peak_indices if adjust_sign(log_fc[i]) >= min_log_fc]
 
-def _diff_test_helper(mat, z, peaks=None, covariate=None) -> list[float]:
+def _diff_test_helper(mat, z, peaks=None, covariate=None, solver: str = "lbfgs") -> list[float]:
     """
     Parameters
     ----------
@@ -216,10 +219,10 @@ def _diff_test_helper(mat, z, peaks=None, covariate=None) -> list[float]:
     if peaks is not None:
         mat = mat[:, peaks]
 
-    return _likelihood_ratio_test_many(np.asarray(X), np.asarray(z), mat)
+    return _likelihood_ratio_test_many(np.asarray(X), np.asarray(z), mat, solver=solver)
 
 
-def _likelihood_ratio_test_many(X, z, Y) -> list[float]:
+def _likelihood_ratio_test_many(X, z, Y, solver: str = "lbfgs") -> list[float]:
     """
     Parameters
     ----------
@@ -245,7 +248,7 @@ def _likelihood_ratio_test_many(X, z, Y) -> list[float]:
     result = []
     for i in tqdm(range(n)):
         result.append(
-            _likelihood_ratio_test(X0, X1, np.asarray(np.ravel(Y[:, i].todense())))
+            _likelihood_ratio_test(X0, X1, np.asarray(np.ravel(Y[:, i].todense())), solver=solver)
         )
     return result
 
@@ -253,6 +256,7 @@ def _likelihood_ratio_test(
     X0: np.ndarray,
     X1: np.ndarray,
     y: np.ndarray,
+    solver: str = "lbfgs",
 ) -> float:
     """
     Comparing null model with alternative model using the likehood ratio test.
@@ -275,13 +279,13 @@ def _likelihood_ratio_test(
     from sklearn.metrics import log_loss
 
     model = LogisticRegression(penalty=None, random_state=0, n_jobs=1,
-        solver="lbfgs", warm_start=False,
+        solver=solver, warm_start=False,
         max_iter = 1000,
         ).fit(X0, y)
     reduced = -log_loss(y, model.predict_proba(X0), normalize=False)
 
     model = LogisticRegression(penalty=None, random_state=0, n_jobs=1,
-        solver="lbfgs", warm_start=False,
+        solver=solver, warm_start=False,
         max_iter = 1000,
         ).fit(X1, y)
     full = -log_loss(y, model.predict_proba(X1), normalize=False)
