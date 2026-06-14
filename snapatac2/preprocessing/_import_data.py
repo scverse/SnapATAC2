@@ -14,6 +14,7 @@ def make_fragment_file(
     bam_file: Path,
     output_file: Path,
     is_paired: bool = True,
+    long_read: bool = False,
     barcode_tag: str | None = None,
     barcode_regex: str | None = None,
     umi_tag: str | None = None,
@@ -44,6 +45,16 @@ def make_fragment_file(
 
     Note
     ----
+    Long-read pipelines (e.g. Oxford Nanopore) usually mark PCR duplicates upstream,
+    for example with Picard ``MarkDuplicates``. By default those reads carry the BAM
+    duplicate flag (``0x400``) and are discarded during filtering, which makes
+    ``frac_duplicates`` always 0 and every fragment count equal to 1. Set
+    ``long_read=True`` (together with ``is_paired=False``) to keep these reads so that
+    SnapATAC2 performs its own deduplication and reports accurate per-fragment counts
+    and ``frac_duplicates``.
+
+    Note
+    ----
     - When using `barcode_regex` or `umi_regex`, the regex must contain exactly one capturing group
       (Parentheses group the regex between them) that matches the barcodes or UMIs.
       Writting the correct regex is tricky. You can test your regex online at https://regex101.com/.
@@ -64,6 +75,8 @@ def make_fragment_file(
         File name of the output fragment file.
     is_paired
         Indicate whether the BAM file contain paired-end reads
+    long_read
+        Indicate whether the BAM file contains long reads (e.g., Oxford Nanopore).
     barcode_tag
         Extract barcodes from TAG fields of BAM records, e.g., `barcode_tag="CB"`.
     barcode_regex
@@ -144,7 +157,7 @@ def make_fragment_file(
         _, compression = snapatac2._utils.get_file_format(output_file)
 
     return internal.make_fragment_file(
-        bam_file, output_file, is_paired, shift_left, shift_right, chunk_size,
+        bam_file, output_file, is_paired, long_read, shift_left, shift_right, chunk_size,
         barcode_tag, barcode_regex, umi_tag, umi_regex, min_mapq, chrM, source,
         compression, compression_level, tempdir,
     )

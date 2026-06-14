@@ -1,8 +1,11 @@
-use noodles::{bam::Record, sam::alignment::record::{Cigar, Flags, cigar::op::Kind}};
+use anyhow::{Context, Result};
+use itertools::Itertools;
+use noodles::{
+    bam::Record,
+    sam::alignment::record::{cigar::op::Kind, Cigar, Flags},
+};
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use std::collections::{HashMap, HashSet};
-use anyhow::{Result, Context};
-use itertools::Itertools;
 
 use super::BarcodeLocation;
 
@@ -98,8 +101,8 @@ impl FlagStat {
                         self.singleton += 1;
                     } else {
                         self.mate_mapped += 1;
-                        let rec_id = record.mate_reference_sequence_id().unwrap().unwrap(); 
-                        let mat_id = record.reference_sequence_id().unwrap().unwrap(); 
+                        let rec_id = record.mate_reference_sequence_id().unwrap().unwrap();
+                        let mat_id = record.reference_sequence_id().unwrap().unwrap();
 
                         if mat_id != rec_id {
                             self.mate_reference_sequence_id_mismatch += 1;
@@ -133,12 +136,22 @@ impl BamQC {
 
     pub fn update(&mut self, record: &Record, barcode: &Option<String>) {
         let flagstat = FlagStat::new(record);
-        if flagstat.paired == 1 && flagstat.read_2 == 1{
+        if flagstat.paired == 1 && flagstat.read_2 == 1 {
             self.num_read2_bases += record.sequence().len() as u64;
-            self.num_read2_q30_bases += record.quality_scores().as_ref().iter().filter(|x| **x >= 30).count() as u64;
+            self.num_read2_q30_bases += record
+                .quality_scores()
+                .as_ref()
+                .iter()
+                .filter(|x| **x >= 30)
+                .count() as u64;
         } else {
             self.num_read1_bases += record.sequence().len() as u64;
-            self.num_read1_q30_bases += record.quality_scores().as_ref().iter().filter(|x| **x >= 30).count() as u64;
+            self.num_read1_q30_bases += record
+                .quality_scores()
+                .as_ref()
+                .iter()
+                .filter(|x| **x >= 30)
+                .count() as u64;
         }
 
         self.all_reads_flagstat.add(&flagstat);
@@ -149,7 +162,12 @@ impl BamQC {
         if barcode.is_some() {
             self.barcoded_reads_flagstat.add(&flagstat);
             if let Some(rid) = record.reference_sequence_id() {
-                if is_hq && self.mitochondrion.as_ref().map_or(false, |x| x.contains(&rid.unwrap())) {
+                if is_hq
+                    && self
+                        .mitochondrion
+                        .as_ref()
+                        .map_or(false, |x| x.contains(&rid.unwrap()))
+                {
                     self.mito_flagstat.add(&flagstat);
                 }
             }
@@ -197,9 +215,18 @@ impl BamQC {
         };
         result.insert("sequenced_reads".to_string(), num_reads as f64);
         result.insert("sequenced_read_pairs".to_string(), num_pairs as f64);
-        result.insert("frac_q30_bases_read1".to_string(), self.num_read1_q30_bases as f64 / self.num_read1_bases as f64);
-        result.insert("frac_q30_bases_read2".to_string(), self.num_read2_q30_bases as f64 / self.num_read2_bases as f64);
-        result.insert("frac_confidently_mapped".to_string(), fraction_confidently_mapped);
+        result.insert(
+            "frac_q30_bases_read1".to_string(),
+            self.num_read1_q30_bases as f64 / self.num_read1_bases as f64,
+        );
+        result.insert(
+            "frac_q30_bases_read2".to_string(),
+            self.num_read2_q30_bases as f64 / self.num_read2_bases as f64,
+        );
+        result.insert(
+            "frac_confidently_mapped".to_string(),
+            fraction_confidently_mapped,
+        );
         result.insert("frac_unmapped".to_string(), fraction_unmapped);
         result.insert("frac_valid_barcode".to_string(), valid_barcode);
         result.insert("frac_nonnuclear".to_string(), fraction_nonnuclear);
@@ -224,11 +251,7 @@ pub struct AlignmentInfo {
 }
 
 impl AlignmentInfo {
-    pub fn new(
-        rec: &Record,
-        barcode: Option<String>,
-        umi: Option<String>,
-    ) -> Result<Self> {
+    pub fn new(rec: &Record, barcode: Option<String>, umi: Option<String>) -> Result<Self> {
         let cigar = rec.cigar();
         let start: usize = rec.alignment_start().unwrap().unwrap().try_into()?;
         let alignment_start: u32 = start.try_into()?;
@@ -239,19 +262,26 @@ impl AlignmentInfo {
             kind == Kind::HardClip || kind == Kind::SoftClip
         });
         let mut clips = clip_groups.into_iter();
-        let clipped_start: u32 = clips.next().map_or(0, |(is_clip, x)| if is_clip {
-            x.map(|x| x.len() as u32).sum()
-        } else {
-            0
+        let clipped_start: u32 = clips.next().map_or(0, |(is_clip, x)| {
+            if is_clip {
+                x.map(|x| x.len() as u32).sum()
+            } else {
+                0
+            }
         });
-        let clipped_end: u32 = clips.last().map_or(0, |(is_clip, x)| if is_clip {
-            x.map(|x| x.len() as u32).sum()
-        } else {
-            0
+        let clipped_end: u32 = clips.last().map_or(0, |(is_clip, x)| {
+            if is_clip {
+                x.map(|x| x.len() as u32).sum()
+            } else {
+                0
+            }
         });
         Ok(Self {
             name: std::str::from_utf8(rec.name().context("no read name")?)?.to_string(),
-            reference_sequence_id: rec.reference_sequence_id().context("no reference sequence id")??.try_into()?,
+            reference_sequence_id: rec
+                .reference_sequence_id()
+                .context("no reference sequence id")??
+                .try_into()?,
             flags: rec.flags().bits(),
             alignment_start,
             alignment_end,
@@ -263,7 +293,9 @@ impl AlignmentInfo {
         })
     }
 
-    pub(crate) fn flags(&self) -> Flags { Flags::from_bits_retain(self.flags) }
+    pub(crate) fn flags(&self) -> Flags {
+        Flags::from_bits_retain(self.flags)
+    }
 
     pub(crate) fn alignment_5p(&self) -> u32 {
         if self.flags().is_reverse_complemented() {
@@ -274,27 +306,22 @@ impl AlignmentInfo {
     }
 }
 
-
-
 /// Filter Bam records.
+///
+/// `exclude_flags` is the SAM flag mask used to discard reads.
 pub fn filter_bam<'a, I>(
     reads: I,
     is_paired: bool,
     barcode_loc: &'a BarcodeLocation,
     umi_loc: Option<&'a BarcodeLocation>,
     mapq_filter: Option<u8>,
+    exclude_flags: u16,
     qc: &'a mut BamQC,
 ) -> impl Iterator<Item = AlignmentInfo> + 'a
 where
     I: Iterator<Item = Record> + 'a,
 {
-    // flag (1804) meaning:
-    //   - read unmapped
-    //   - mate unmapped
-    //   - not primary alignment
-    //   - read fails platform/vendor quality checks
-    //   - read is PCR or optical duplicate
-    let flag_failed = Flags::from_bits(1804).unwrap();
+    let flag_failed = Flags::from_bits_retain(exclude_flags);
     reads.filter_map(move |r| {
         let barcode = barcode_loc.extract(&r).ok();
         let umi = umi_loc.and_then(|x| x.extract(&r).ok());
@@ -305,8 +332,8 @@ where
         qc.update(&r, &barcode);
 
         let flag = r.flags();
-        let is_properly_aligned = !flag.is_supplementary() &&
-            (!is_paired || flag.is_properly_segmented());
+        let is_properly_aligned =
+            !flag.is_supplementary() && (!is_paired || flag.is_properly_segmented());
         let flag_pass = !flag.intersects(flag_failed);
         if is_properly_aligned && flag_pass && is_hq && barcode.is_some() {
             let alignment = AlignmentInfo::new(&r, barcode, umi).unwrap();
@@ -317,9 +344,12 @@ where
     })
 }
 
-
 // The sum of all base qualities in the record above 15.
 fn sum_of_qual_score(read: &Record) -> u32 {
-    read.quality_scores().as_ref().iter().map(|x| u8::from(*x) as u32)
-        .filter(|x| *x >= 15).sum()
+    read.quality_scores()
+        .as_ref()
+        .iter()
+        .map(|x| u8::from(*x) as u32)
+        .filter(|x| *x >= 15)
+        .sum()
 }
