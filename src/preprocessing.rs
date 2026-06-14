@@ -28,7 +28,7 @@ use snapatac2_core::{
 
 #[pyfunction]
 #[pyo3(signature = (
-    bam_file, output_file, is_paired, shift_left, shift_right, chunk_size,
+    bam_file, output_file, is_paired, long_read, shift_left, shift_right, chunk_size,
     barcode_tag=None, barcode_regex=None, umi_tag=None, umi_regex=None, mapq=None,
     mitochondrial_dna=None, source=None, compression=None, compression_level=None, temp_dir=None
 ))]
@@ -36,6 +36,7 @@ pub(crate) fn make_fragment_file(
     bam_file: PathBuf,
     output_file: PathBuf,
     is_paired: bool,
+    long_read: bool,
     shift_left: i64,
     shift_right: i64,
     chunk_size: usize,
@@ -62,6 +63,7 @@ pub(crate) fn make_fragment_file(
         bam_file,
         output_file,
         is_paired,
+        long_read,
         barcode_tag.map(|x| parse_tag(x)),
         barcode_regex,
         umi_tag.map(|x| parse_tag(x)),

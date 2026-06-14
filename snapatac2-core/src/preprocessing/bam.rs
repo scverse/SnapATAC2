@@ -1,20 +1,31 @@
-mod mark_duplicates;
-mod header;
 mod flagstat;
+mod header;
+mod mark_duplicates;
+pub use flagstat::{filter_bam, BamQC, FlagStat};
 pub use mark_duplicates::{group_bam_by_barcode, BarcodeLocation};
-pub use flagstat::{filter_bam, FlagStat, BamQC};
 
-use bstr::BString;
+use anyhow::{bail, Result};
 use bed_utils::bed::BEDLike;
-use noodles::{bam, sam::alignment::record::data::field::Tag};
+use bstr::BString;
 use indicatif::{style::ProgressStyle, ProgressBar, ProgressDrawTarget, ProgressIterator};
-use regex::Regex;
-use anyhow::{Result, bail};
-use std::{collections::{HashMap, HashSet}, io::Write, path::Path};
 use log::warn;
+use noodles::{bam, sam::alignment::record::data::field::Tag};
+use regex::Regex;
+use std::{
+    collections::{HashMap, HashSet},
+    io::Write,
+    path::Path,
+};
 
-use crate::utils::{open_file_for_write, Compression};
 use crate::preprocessing::Fragment;
+use crate::utils::{open_file_for_write, Compression};
+
+// SAM flags to discard during filtering: unmapped (0x4), mate unmapped (0x8),
+// not primary (0x100), QC fail (0x200), PCR/optical duplicate (0x400).
+// 0x4 | 0x8 | 0x100 | 0x200 | 0x400 = 1804.
+const EXCLUDE_FLAGS: u16 = 1804;
+// The PCR/optical duplicate flag (0x400).
+const DUPLICATE_FLAG: u16 = 0x400;
 
 #[derive(Debug, Clone, Default)]
 pub struct FragmentQC {
@@ -37,7 +48,11 @@ impl FragmentQC {
         self.num_pcr_duplicates += fragment.count() as u64 - 1;
         self.num_unique_fragments += 1;
         let size = fragment.len();
-        if self.mitochondrion.as_ref().map_or(true, |mito| !mito.contains(fragment.chrom())) {
+        if self
+            .mitochondrion
+            .as_ref()
+            .map_or(true, |mito| !mito.contains(fragment.chrom()))
+        {
             if size < 147 {
                 self.num_frag_nfr += 1;
             } else if size <= 294 {
@@ -57,9 +72,19 @@ impl FragmentQC {
     ///                        as another read pair in the library.
     pub fn report(&self) -> HashMap<String, f64> {
         let mut result = HashMap::new();
-        result.insert("frac_duplicates".to_string(), self.num_pcr_duplicates as f64 / (self.num_unique_fragments + self.num_pcr_duplicates) as f64);
-        result.insert("frac_fragment_in_nucleosome_free_region".to_string(), self.num_frag_nfr as f64 / self.num_unique_fragments as f64);
-        result.insert("frac_fragment_flanking_single_nucleosome".to_string(), self.num_frag_single as f64 / self.num_unique_fragments as f64);
+        result.insert(
+            "frac_duplicates".to_string(),
+            self.num_pcr_duplicates as f64
+                / (self.num_unique_fragments + self.num_pcr_duplicates) as f64,
+        );
+        result.insert(
+            "frac_fragment_in_nucleosome_free_region".to_string(),
+            self.num_frag_nfr as f64 / self.num_unique_fragments as f64,
+        );
+        result.insert(
+            "frac_fragment_flanking_single_nucleosome".to_string(),
+            self.num_frag_single as f64 / self.num_unique_fragments as f64,
+        );
         result
     }
 }
@@ -80,6 +105,7 @@ impl FragmentQC {
 /// * `bam_file` - File name of the BAM file.
 /// * `output_file` - File name of the output fragment file.
 /// * `is_paired` - Indicate whether the BAM file contain paired-end reads.
+/// * `long_read` - Indicate whether the BAM file contains long reads (e.g. ONT).
 /// * `barcode_tag` - Extract barcodes from TAG fields of BAM records, e.g., `barcode_tag = "CB"`.
 /// * `barcode_regex` - Extract barcodes from read names of BAM records using regular expressions.
 ///     Reguler expressions should contain exactly one capturing group
@@ -102,6 +128,7 @@ pub fn make_fragment_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(
     bam_file: P1,
     output_file: P2,
     is_paired: bool,
+    long_read: bool,
     barcode_tag: Option<[u8; 2]>,
     barcode_regex: Option<&str>,
     umi_tag: Option<[u8; 2]>,
@@ -143,7 +170,7 @@ pub fn make_fragment_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(
         Some("10x") => {
             warn!("The number of PCR duplicates cannot be computed for 10X Genomics BAM files.");
             header::read_10x_header(reader.get_mut())?
-        },
+        }
         _ => reader.read_header()?,
     };
 
@@ -157,36 +184,42 @@ pub fn make_fragment_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(
             .unwrap(),
         );
     let mut fragment_qc = FragmentQC::new(mitochondrion.clone());
-    let mut library_qc = BamQC::new(
-        mitochondrion.map(|mito| mito.into_iter().flat_map(
-            |x| header.reference_sequences().get_index_of(&BString::from(x))).collect()
-        )
-    );
+    let mut library_qc = BamQC::new(mitochondrion.map(|mito| {
+        mito.into_iter()
+            .flat_map(|x| header.reference_sequences().get_index_of(&BString::from(x)))
+            .collect()
+    }));
+    // Long-read pipelines mark duplicates upstream; keep those reads (drop only the
+    // duplicate bit from the filter) so SnapATAC2 deduplicates them itself.
+    let exclude_flags = if long_read {
+        EXCLUDE_FLAGS & !DUPLICATE_FLAG
+    } else {
+        EXCLUDE_FLAGS
+    };
     let filtered_records = filter_bam(
         reader.records().map(Result::unwrap),
         is_paired,
         &barcode,
         umi.as_ref(),
         mapq,
+        exclude_flags,
         &mut library_qc,
     );
-    group_bam_by_barcode(
-        filtered_records,
-        is_paired,
-        temp_dir,
-        chunk_size,
-    )
-    .into_fragments(&header)
-    .progress_with(spinner)
-    .for_each(|barcode| barcode.into_iter().for_each(|mut rec| {
-        if rec.strand().is_none() { // perform fragment length correction for paired-end reads
-            rec.set_start(rec.start().saturating_add_signed(shift_left));
-            rec.set_end(rec.end().saturating_add_signed(shift_right));
-        }
-        if rec.len() > 0 {
-            fragment_qc.update(&rec);
-            writeln!(output, "{}", rec).unwrap();
-        }
-    }));
+    group_bam_by_barcode(filtered_records, is_paired, temp_dir, chunk_size)
+        .into_fragments(&header)
+        .progress_with(spinner)
+        .for_each(|barcode| {
+            barcode.into_iter().for_each(|mut rec| {
+                if rec.strand().is_none() {
+                    // perform fragment length correction for paired-end reads
+                    rec.set_start(rec.start().saturating_add_signed(shift_left));
+                    rec.set_end(rec.end().saturating_add_signed(shift_right));
+                }
+                if rec.len() > 0 {
+                    fragment_qc.update(&rec);
+                    writeln!(output, "{}", rec).unwrap();
+                }
+            })
+        });
     Ok((library_qc, fragment_qc))
 }
