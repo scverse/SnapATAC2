@@ -31,32 +31,52 @@ def add_tile_matrix(
     backend: Literal['hdf5'] = 'hdf5',
     n_jobs: int = 8,
 ) -> internal.AnnData | None:
-    """Generate cell by bin count matrix.
+    """Generate a cell-by-genomic-bin count matrix.
 
-    This function is used to generate and add a cell by bin count matrix to the AnnData
-    object.
+    Use this function after :func:`~snapatac2.pp.import_fragments` or
+    :func:`~snapatac2.pp.import_values` to summarize per-cell fragments or values
+    into fixed-width genomic bins. Execute this step before feature selection,
+    dimensionality reduction, clustering, or other workflows that require a count
+    matrix in `.X`.
 
-    :func:`~snapatac2.pp.import_fragments` must be ran first in order to use this function.
+    Anti-Patterns
+    -------------
+    - Do NOT call this function on an AnnData object that was not created by
+      :func:`~snapatac2.pp.import_fragments` or :func:`~snapatac2.pp.import_values`.
+      The input must contain the internal fragment or value storage used by
+      SnapATAC2.
+    - Do NOT use `inplace=False` with a list of AnnData objects. Lists are only
+      supported when `inplace=True`, where each object is updated in parallel.
+    - Do NOT expect `file` or `backend` to change output storage when
+      `inplace=True`; these arguments are only used when `inplace=False`.
+    - Do NOT pass `exclude_chroms=None` unless mitochondrial, sex, and other
+      special chromosomes should be retained in the tile matrix.
 
     Parameters
     ----------
     adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-        `adata` could also be a list of AnnData objects when `inplace=True`.
-        In this case, the function will be applied to each AnnData object in parallel.
+        The imported AnnData object, or a list of imported AnnData objects when
+        `inplace=True`. Each object must contain fragment data from
+        :func:`~snapatac2.pp.import_fragments` or value data from
+        :func:`~snapatac2.pp.import_values`.
     bin_size
-        The size of consecutive genomic regions used to record the counts.
+        The width, in base pairs, of each consecutive genomic bin.
     inplace
-        Whether to add the tile matrix to the AnnData object or return a new AnnData object.
+        If `True`, store the tile matrix in `adata.X` and return `None`. If
+        `False`, return a new AnnData object containing the tile matrix.
     chunk_size
-        Increasing the chunk_size speeds up I/O but uses more memory.
+        Number of bins processed per chunk. Increase this value to improve I/O
+        throughput when memory is sufficient; decrease it to reduce peak memory
+        use.
     exclude_chroms
-        A list of chromosomes to exclude.
+        Chromosome names to exclude before binning. By default, mitochondrial
+        and Y chromosomes are excluded (`"chrM"`, `"chrY"`, `"M"`, `"Y"`).
     min_frag_size
-        Minimum fragment size to include.
+        Minimum fragment size to include. Fragments shorter than this threshold
+        are ignored. Use `None` to disable the lower bound.
     max_frag_size
-        Maximum fragment size to include.
+        Maximum fragment size to include. Fragments longer than this threshold
+        are ignored. Use `None` to disable the upper bound.
     counting_strategy
         The strategy to compute feature counts. It must be one of the following:
         "fragment", "insertion", or "paired-insertion". "fragment" means the
@@ -68,33 +88,33 @@ def add_tile_matrix(
         of interest [Miao24]_.
         Note that this parameter has no effect if input are single-end reads.
     value_type
-        The type of value to use from `.obsm['_values']`, only available when 
-        data is imported using :func:`~snapatac2.pp.import_values`. It must be one of the following:
-        "target", "total", or "fraction". "target" means the value is the number
-        of recrods that are with postive measurements, e.g., number of methylated bases.
-        "total" means the value is the total number of measurements, e.g., methylated bases plus
-        unmethylated bases. "fraction" means the value is the fraction of the
-        records that are positive, e.g., the fraction of methylated bases.
+        The value to summarize from `.obsm['_values']` when data was imported
+        with :func:`~snapatac2.pp.import_values`. It must be one of "target",
+        "total", or "fraction". "target" means the number of records with
+        positive measurements, e.g. methylated bases. "total" means the total
+        number of measurements, e.g. methylated plus unmethylated bases.
+        "fraction" means the fraction of records with positive measurements.
     summary_type
-        The type of summary to use when multiple values are found in a bin. This parameter
-        is only used when `.obsm['_values']` exists, which is created by :func:`~snapatac2.pp.import_values`. 
-        It must be one of the following: "sum" or "mean".
+        The aggregation to use when multiple values are found in a bin. This
+        parameter is only used when `.obsm['_values']` exists, which is created
+        by :func:`~snapatac2.pp.import_values`. It must be "sum" or "mean".
     file
-        File name of the output file used to store the result. If provided, result will
-        be saved to a backed AnnData, otherwise an in-memory AnnData is used.
-        This has no effect when `inplace=True`.
+        Output file for the returned AnnData object when `inplace=False`. If
+        provided, the result is stored as backed AnnData. If `None`, the result
+        is returned in memory. This argument has no effect when `inplace=True`.
     backend
-        The backend to use for storing the result. If `None`, the default backend will be used.
+        Backend used for backed output when `file` is provided.
     n_jobs
-        Number of jobs to run in parallel when `adata` is a list.
-        If `n_jobs=-1`, all CPUs will be used.
+        Number of parallel jobs to use when `adata` is a list. If `n_jobs=-1`,
+        all CPUs are used.
     
     Returns
     -------
     AnnData | ad.AnnData | None
-        An annotated data matrix of shape `n_obs` x `n_vars`. Rows correspond to
-        cells and columns to bins. If `file=None`, an in-memory AnnData will be
-        returned, otherwise a backed AnnData is returned.
+        If `inplace=False`, returns an annotated data matrix whose rows are
+        cells and columns are genomic bins. If `file=None`, returns an in-memory
+        AnnData object; otherwise returns a backed AnnData object. If
+        `inplace=True`, returns `None` and updates `adata.X` in place.
 
     See Also
     --------
@@ -104,13 +124,18 @@ def add_tile_matrix(
     Examples
     --------
     >>> import snapatac2 as snap
-    >>> data = snap.pp.import_fragments(snap.datasets.pbmc500(downsample=True), chrom_sizes=snap.genome.hg38, sorted_by_barcode=False)
-    >>> snap.pp.add_tile_matrix(data, bin_size=500)
-    >>> print(data)
-    AnnData object with n_obs × n_vars = 585 × 6062095
-        obs: 'n_fragment', 'frac_dup', 'frac_mito'
-        uns: 'reference_sequences'
-        obsm: 'fragment_paired'
+    >>> fragments = snap.datasets.pbmc500(downsample=True)
+    >>> data = snap.pp.import_fragments(
+    ...     fragments,
+    ...     chrom_sizes=snap.genome.hg38,
+    ...     sorted_by_barcode=False,
+    ... )
+    >>> snap.pp.add_tile_matrix(
+    ...     data,
+    ...     bin_size=500,
+    ...     exclude_chroms=["chrM", "chrY"],
+    ... )
+    >>> print(data.shape)
     """
     def fun(data, out):
         internal.mk_tile_matrix(data, bin_size, chunk_size, counting_strategy, value_type, summary_type, exclude_chroms, min_frag_size, max_frag_size, out)
@@ -154,42 +179,59 @@ def make_peak_matrix(
     value_type: Literal['target', 'total', 'fraction'] = 'target',
     summary_type: Literal['sum', 'mean'] = 'sum',
 ) -> internal.AnnData:
-    """Generate cell by peak count matrix.
+    """Generate a cell-by-peak count matrix.
 
-    This function will generate a cell by peak count matrix and store it in a 
-    new .h5ad file.
+    Use this function after :func:`~snapatac2.pp.import_fragments`,
+    :func:`~snapatac2.pp.import_values`, or peak calling to aggregate fragments
+    or values over peak intervals. Provide peak intervals with exactly one of
+    `peak_file` or `use_rep`; if both are omitted, the function reads peaks from
+    `adata.uns["peaks"]`.
 
-    :func:`~snapatac2.pp.import_fragments` must be ran first in order to use this function.
+    Anti-Patterns
+    -------------
+    - Do NOT pass both `peak_file` and `use_rep`; the function raises an error
+      because the peak source would be ambiguous.
+    - Do NOT call this function before importing fragments or values. The input
+      must contain SnapATAC2's internal fragment or value storage.
+    - Do NOT expect `file` or `backend` to affect output storage when
+      `inplace=True`; these arguments are only used when `inplace=False`.
+    - Do NOT set `use_x=True` unless `.X` already contains the feature-by-cell
+      counts that should be reused as raw counts.
 
     Parameters
     ----------
     adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
+        The imported AnnData object, or AnnDataSet, containing per-cell fragment
+        or value storage.
     use_rep
-        This is used to read peak information from `.uns[use_rep]`.
-        The peaks can also be provided by a list of strings:
-        ["chr1:1-100", "chr2:2-200"].
+        Peak source stored in `adata.uns[use_rep]`, or a list of peak strings
+        such as `["chr1:1-100", "chr2:2-200"]`. If `None` and `peak_file` is
+        also `None`, `"peaks"` is used.
     inplace
-        Whether to add the tile matrix to the AnnData object or return a new AnnData object.
+        If `True`, store the peak matrix in `adata.X` and return `None`. If
+        `False`, return a new AnnData object containing the peak matrix.
     file
-        File name of the output h5ad file used to store the result. If provided,
-        result will be saved to a backed AnnData, otherwise an in-memory AnnData
-        is used. This has no effect when `inplace=True`.
+        Output file for the returned AnnData object when `inplace=False`. If
+        provided, the result is stored as backed AnnData. If `None`, the result
+        is returned in memory. This argument has no effect when `inplace=True`.
     backend
-        The backend to use for storing the result. If `None`, the default backend will be used.
+        Backend used for backed output when `file` is provided.
     peak_file
-        Bed file containing the peaks. If provided, peak information will be read
-        from this file.
+        BED file containing peak intervals. Plain text and `.gz` files are
+        supported. Do not set this together with `use_rep`.
     chunk_size
-        Chunk size
+        Number of peaks processed per chunk. Increase this value to improve I/O
+        throughput when memory is sufficient; decrease it to reduce peak memory
+        use.
     use_x
-        If True, use the matrix stored in `.X` as raw counts.
-        Otherwise the `.obsm['insertion']` is used.
+        If `True`, use the matrix stored in `.X` as raw counts. If `False`, use
+        the imported fragment or insertion storage.
     min_frag_size
-        Minimum fragment size to include.
+        Minimum fragment size to include. Fragments shorter than this threshold
+        are ignored. Use `None` to disable the lower bound.
     max_frag_size
-        Maximum fragment size to include.
+        Maximum fragment size to include. Fragments longer than this threshold
+        are ignored. Use `None` to disable the upper bound.
     counting_strategy
         The strategy to compute feature counts. It must be one of the following:
         "fragment", "insertion", or "paired-insertion". "fragment" means the
@@ -201,24 +243,24 @@ def make_peak_matrix(
         of interest [Miao24]_.
         Note that this parameter has no effect if input are single-end reads.
     value_type
-        The type of value to use from `.obsm['_values']`, only available when 
-        data is imported using :func:`~snapatac2.pp.import_values`. It must be one of the following:
-        "target", "total", or "fraction". "target" means the value is the number
-        of recrods that are with postive measurements, e.g., number of methylated bases.
-        "total" means the value is the total number of measurements, e.g., methylated bases plus
-        unmethylated bases. "fraction" means the value is the fraction of the
-        records that are positive, e.g., the fraction of methylated bases.
+        The value to summarize from `.obsm['_values']` when data was imported
+        with :func:`~snapatac2.pp.import_values`. It must be one of "target",
+        "total", or "fraction". "target" means the number of records with
+        positive measurements, e.g. methylated bases. "total" means the total
+        number of measurements, e.g. methylated plus unmethylated bases.
+        "fraction" means the fraction of records with positive measurements.
     summary_type
-        The type of summary to use when multiple values are found in a bin. This parameter
-        is only used when `.obsm['_values']` exists, which is created by :func:`~snapatac2.pp.import_values`. 
-        It must be one of the following: "sum" or "mean".
+        The aggregation to use when multiple values are found in a peak. This
+        parameter is only used when `.obsm['_values']` exists, which is created
+        by :func:`~snapatac2.pp.import_values`. It must be "sum" or "mean".
 
     Returns
     -------
     AnnData | ad.AnnData | None
-        An annotated data matrix of shape `n_obs` x `n_vars`. Rows correspond to
-        cells and columns to peaks. If `file=None`, an in-memory AnnData will be
-        returned, otherwise a backed AnnData is returned.
+        If `inplace=False`, returns an annotated data matrix whose rows are
+        cells and columns are peaks. If `file=None`, returns an in-memory AnnData
+        object; otherwise returns a backed AnnData object. If `inplace=True`,
+        returns `None` and updates `adata.X` in place.
 
     See Also
     --------
@@ -228,11 +270,17 @@ def make_peak_matrix(
     Examples
     --------
     >>> import snapatac2 as snap
-    >>> data = snap.pp.import_fragments(snap.datasets.pbmc500(downsample=True), chrom_sizes=snap.genome.hg38, sorted_by_barcode=False)
-    >>> peak_mat = snap.pp.make_peak_matrix(data, peak_file=snap.datasets.cre_HEA())
-    >>> print(peak_mat)
-    AnnData object with n_obs × n_vars = 585 × 1154611
-        obs: 'n_fragment', 'frac_dup', 'frac_mito'
+    >>> fragments = snap.datasets.pbmc500(downsample=True)
+    >>> data = snap.pp.import_fragments(
+    ...     fragments,
+    ...     chrom_sizes=snap.genome.hg38,
+    ...     sorted_by_barcode=False,
+    ... )
+    >>> peak_mat = snap.pp.make_peak_matrix(
+    ...     data,
+    ...     peak_file=snap.datasets.cre_HEA(),
+    ... )
+    >>> print(peak_mat.shape)
     """
     import gzip
 
@@ -289,56 +337,74 @@ def make_gene_matrix(
     max_frag_size: int | None = None,
     counting_strategy: Literal['fragment', 'insertion', 'paired-insertion'] = 'paired-insertion',
 ) -> internal.AnnData:
-    """Generate cell by gene activity matrix.
+    """Generate a cell-by-gene activity matrix.
 
-    Generate cell by gene activity matrix by counting the TN5 insertions in each gene's
-    regulatory domain. The regulatory domain is initially defined as the TSS or the
-    whole gene body (if `include_gene_body=True`). We then extends this domain
-    by `upstream` and `downstream` base pairs on both sides.
-      
-    The result will be stored in a new file and a new AnnData object
-    will be created.
-    :func:`~snapatac2.pp.import_fragments` must be ran first in order to use this function.
+    Use this function after :func:`~snapatac2.pp.import_fragments` to summarize
+    chromatin accessibility over each gene's regulatory domain. The regulatory
+    domain is defined from the TSS, or from the full gene body when
+    `include_gene_body=True`, then extended by `upstream` and `downstream` base
+    pairs.
+
+    Anti-Patterns
+    -------------
+    - Do NOT call this function on an AnnData object that was not created by
+      :func:`~snapatac2.pp.import_fragments`; the input must contain fragment or
+      insertion storage.
+    - Do NOT set `use_x=True` unless `.X` already contains the binned or peak
+      counts that should be reused for gene aggregation.
+    - Do NOT expect `file` or `backend` to affect output storage when
+      `inplace=True`; these arguments are only used when `inplace=False`.
+    - Do NOT change annotation key names unless the GFF/GTF file uses different
+      attribute names than the defaults.
 
     Parameters
     ----------
     adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
+        The imported AnnData object, or AnnDataSet, containing per-cell fragment
+        or insertion storage.
     gene_anno
-        Either a Genome object or the path of a gene annotation file in GFF or GTF format.
+        Genome object or path to a gene annotation file in GFF or GTF format.
     inplace
-        Whether to add the gene matrix to the AnnData object or return a new AnnData object.
+        If `True`, store the gene activity matrix in `adata.X` and return
+        `None`. If `False`, return a new AnnData object containing the gene
+        activity matrix.
     file
-        File name of the h5ad file used to store the result. This has no effect when `inplace=True`.
+        Output file for the returned AnnData object when `inplace=False`. If
+        provided, the result is stored as backed AnnData. If `None`, the result
+        is returned in memory. This argument has no effect when `inplace=True`.
     backend
-        The backend to use for storing the result. If `None`, the default backend will be used.
+        Backend used for backed output when `file` is provided.
     chunk_size
-        Chunk size
+        Number of genes processed per chunk. Increase this value to improve I/O
+        throughput when memory is sufficient; decrease it to reduce peak memory
+        use.
     use_x
-        If True, use the matrix stored in `.X` to compute the gene activity.
-        Otherwise the `.obsm['insertion']` is used.
+        If `True`, use the matrix stored in `.X` to compute gene activity. If
+        `False`, use the imported fragment or insertion storage.
     id_type
-        "gene" or "transcript".
+        Feature identifier to aggregate by. Use "gene" to aggregate transcripts
+        into genes, or "transcript" to keep transcript-level entries.
     upstream
-        The number of base pairs upstream of the regulatory domain.
+        Number of base pairs to extend upstream of the regulatory domain.
     downstream
-        The number of base pairs downstream of the regulatory domain.
+        Number of base pairs to extend downstream of the regulatory domain.
     include_gene_body
-        Whether to include the gene body in the regulatory domain. If False, the
-        TSS is used as the regulatory domain.
+        If `True`, include the full gene body before extension. If `False`, use
+        the TSS as the regulatory domain before extension.
     transcript_name_key
-        The key of the transcript name in the gene annotation file.
+        Attribute key for transcript names in the gene annotation file.
     transcript_id_key
-        The key of the transcript id in the gene annotation file.
+        Attribute key for transcript IDs in the gene annotation file.
     gene_name_key
-        The key of the gene name in the gene annotation file.
+        Attribute key for gene names in the gene annotation file.
     gene_id_key
-        The key of the gene id in the gene annotation file.
+        Attribute key for gene IDs in the gene annotation file.
     min_frag_size
-        Minimum fragment size to include.
+        Minimum fragment size to include. Fragments shorter than this threshold
+        are ignored. Use `None` to disable the lower bound.
     max_frag_size
-        Maximum fragment size to include.
+        Maximum fragment size to include. Fragments longer than this threshold
+        are ignored. Use `None` to disable the upper bound.
     counting_strategy
         The strategy to compute feature counts. It must be one of the following:
         "fragment", "insertion", or "paired-insertion". "fragment" means the
@@ -353,9 +419,10 @@ def make_gene_matrix(
     Returns
     -------
     AnnData
-        An annotated data matrix of shape `n_obs` x `n_vars`. Rows correspond to
-        cells and columns to genes. If `file=None`, an in-memory AnnData will be
-        returned, otherwise a backed AnnData is returned.
+        If `inplace=False`, returns an annotated data matrix whose rows are
+        cells and columns are genes or transcripts. If `file=None`, returns an
+        in-memory AnnData object; otherwise returns a backed AnnData object. If
+        `inplace=True`, returns `None` and updates `adata.X` in place.
 
     See Also
     --------
@@ -365,12 +432,21 @@ def make_gene_matrix(
     Examples
     --------
     >>> import snapatac2 as snap
-    >>> data = snap.pp.import_fragments(snap.datasets.pbmc500(downsample=True), chrom_sizes=snap.genome.hg38, sorted_by_barcode=False)
+    >>> fragments = snap.datasets.pbmc500(downsample=True)
+    >>> data = snap.pp.import_fragments(
+    ...     fragments,
+    ...     chrom_sizes=snap.genome.hg38,
+    ...     sorted_by_barcode=False,
+    ... )
     >>> gene_mat = snap.pp.make_gene_matrix(data, gene_anno=snap.genome.hg38)
-    >>> print(gene_mat)
-    AnnData object with n_obs × n_vars = 585 × 60606
-        obs: 'n_fragment', 'frac_dup', 'frac_mito'
-    >>> gene_mat = snap.pp.make_gene_matrix(data, gene_anno=snap.genome.hg38, upstream=1000, downstream=1000, include_gene_body=False)
+    >>> print(gene_mat.shape)
+    >>> promoter_mat = snap.pp.make_gene_matrix(
+    ...     data,
+    ...     gene_anno=snap.genome.hg38,
+    ...     upstream=1000,
+    ...     downstream=1000,
+    ...     include_gene_body=False,
+    ... )
     """
     if isinstance(gene_anno, Genome):
         gene_anno = gene_anno.annotation
@@ -396,34 +472,59 @@ def call_cells(
     inplace: bool = True,
     n_jobs: int = 8,
 ) -> np.ndarray | None:
-    """
-    Calling cells based on the number of feature counts.
+    """Call valid cells from feature counts using the OrdMag algorithm.
 
-    This implements Cell Ranger's
-    [cell calling algorithm](https://www.10xgenomics.com/support/software/cell-ranger/latest/algorithms-overview/cr-gex-algorithm),
-    which is based on two primary algorithms: Order of magnitude (OrdMag) and EmptyDrops.
-    
-    Currently only OrdMag is implemented.
+    Use this function to remove empty or low-signal barcodes after importing
+    fragments and computing a per-barcode count metric. The implementation uses
+    the order-of-magnitude (OrdMag) strategy from Cell Ranger's cell-calling
+    workflow; EmptyDrops is not implemented.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass a representation that is missing from `data.obs` when
+      `use_rep` is a string.
+    - Do NOT use this function as a replacement for QC thresholding by TSS
+      enrichment or fragment count; use :func:`filter_cells` when explicit QC
+      thresholds are required.
+    - Do NOT expect a return value when `inplace=True`; the object is subset in
+      place and the function returns `None`.
 
     Parameters
     ----------
     data
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-        `data` can also be a list of AnnData objects.
-        In this case, the function will be applied to each AnnData object in parallel.
+        AnnData object, or list of AnnData objects, to subset to called cells.
     use_rep
-        The representation to use for filtering. This can be a string or a numpy array.
+        Count representation used for cell calling. If a string, read counts
+        from `data.obs[use_rep]`. If an array, use it directly as one count per
+        barcode.
     inplace
-        Perform computation inplace or return result.
+        If `True`, subset `data` to called cells and return `None`. If `False`,
+        return integer indices of called cells without modifying `data`.
     n_jobs
         Number of parallel jobs to use when `data` is a list.
 
     Returns
     -------
-    np.ndarray | None:
-        If `inplace = True`, directly subsets the data matrix. Otherwise return 
-        indices of cells that pass the filtering.
+    np.ndarray | list[np.ndarray] | None:
+        If `inplace=False`, returns integer indices of barcodes called as cells.
+        If `data` is a list, returns one index array per object. If
+        `inplace=True`, returns `None` and subsets `data` in place.
+
+    See Also
+    --------
+    filter_cells : Apply explicit QC thresholds to cells.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> fragments = snap.datasets.pbmc500(downsample=True)
+    >>> data = snap.pp.import_fragments(
+    ...     fragments,
+    ...     chrom_sizes=snap.genome.hg38,
+    ...     sorted_by_barcode=False,
+    ... )
+    >>> selected = snap.pp.call_cells(data, use_rep="n_fragment", inplace=False)
+    >>> data = data[selected, :]
     """
     if isinstance(data, list):
         result = snapatac2._utils.anndata_par(
@@ -455,37 +556,71 @@ def filter_cells(
     inplace: bool = True,
     n_jobs: int = 8,
 ) -> np.ndarray | None:
-    """
-    Filter cell outliers based on counts and numbers of genes expressed.
-    For instance, only keep cells with at least `min_counts` counts or
-    `min_tsse` TSS enrichment scores. This is to filter measurement outliers,
-    i.e. "unreliable" observations.
+    """Filter cells by fragment-count and TSS-enrichment QC thresholds.
+
+    Use this function after computing per-cell QC metrics to remove unreliable
+    observations. By default, cells must have at least 1000 fragments and a TSS
+    enrichment score of at least 5.0.
+
+    Anti-Patterns
+    -------------
+    - Do NOT call this function before `data.obs["n_fragment"]` and, when TSS
+      filtering is enabled, `data.obs["tsse"]` are available.
+    - Do NOT leave `min_tsse` enabled when TSS enrichment was not computed; pass
+      `min_tsse=None` to filter only by fragment counts.
+    - Do NOT expect a return value when `inplace=True`; the object is subset in
+      place and the function returns `None`.
 
     Parameters
     ----------
     data
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-        `data` can also be a list of AnnData objects.
-        In this case, the function will be applied to each AnnData object in parallel.
+        AnnData object, or list of AnnData objects, to filter.
     min_counts
-        Minimum number of counts required for a cell to pass filtering.
+        Minimum `data.obs["n_fragment"]` value required for a cell to pass
+        filtering. Use `None` to disable the lower fragment-count bound.
     min_tsse
-        Minimum TSS enrichemnt score required for a cell to pass filtering.
+        Minimum `data.obs["tsse"]` value required for a cell to pass filtering.
+        Use `None` to disable the lower TSS-enrichment bound.
     max_counts
-        Maximum number of counts required for a cell to pass filtering.
+        Maximum `data.obs["n_fragment"]` value allowed for a cell to pass
+        filtering. Use `None` to disable the upper fragment-count bound.
     max_tsse
-        Maximum TSS enrichment score expressed required for a cell to pass filtering.
+        Maximum `data.obs["tsse"]` value allowed for a cell to pass filtering.
+        Use `None` to disable the upper TSS-enrichment bound.
     inplace
-        Perform computation inplace or return result.
+        If `True`, subset `data` in place and return `None`. If `False`, return
+        integer indices of cells passing all enabled thresholds.
     n_jobs
         Number of parallel jobs to use when `data` is a list.
 
     Returns
     -------
-    np.ndarray | None:
-        If `inplace = True`, directly subsets the data matrix. Otherwise return 
-        indices of cells that pass the filtering.
+    np.ndarray | list[np.ndarray] | None:
+        If `inplace=False`, returns integer indices of cells that pass all
+        enabled thresholds. If `data` is a list, returns one index array per
+        object. If `inplace=True`, returns `None` and subsets `data` in place.
+
+    See Also
+    --------
+    call_cells : Call cell-containing barcodes from count distributions.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> fragments = snap.datasets.pbmc500(downsample=True)
+    >>> data = snap.pp.import_fragments(
+    ...     fragments,
+    ...     chrom_sizes=snap.genome.hg38,
+    ...     sorted_by_barcode=False,
+    ... )
+    >>> snap.metrics.tsse(data, snap.genome.hg38)
+    >>> selected = snap.pp.filter_cells(
+    ...     data,
+    ...     min_counts=1000,
+    ...     min_tsse=5.0,
+    ...     inplace=False,
+    ... )
+    >>> data = data[selected, :]
     """
     if isinstance(data, list):
         result = snapatac2._utils.anndata_par(
@@ -542,53 +677,70 @@ def select_features(
     n_jobs: int = 8,
     verbose: bool = True,
 ) -> np.ndarray | list[np.ndarray] | None:
-    """
-    Perform feature selection by selecting the most accessibile features across
-    all cells unless `max_iter` > 1.
+    """Select informative genomic features for downstream analysis.
 
-    Note
-    ----
-    This function does not perform the actual subsetting. The feature mask is used by
-    various functions to generate submatrices on the fly.
-    Features that are zero in all cells will be always removed regardless of the
-    filtering criteria.
-    For more discussion about feature selection, see: https://github.com/scverse/SnapATAC2/discussions/116.
+    Use this function after generating a tile, peak, or other count matrix to
+    mark features that should be used for dimensionality reduction and graph
+    construction. With the default `max_iter=1`, features are selected by total
+    accessibility across all cells after lower- and upper-quantile filtering.
+
+    Notes
+    -----
+    - This function does not subset the matrix. It stores a boolean mask in
+      `.var["selected"]` when `inplace=True`, or returns the mask when
+      `inplace=False`. Downstream functions use this mask to generate submatrices
+      on the fly. Features that are zero in all cells are always removed. For more
+      discussion, see https://github.com/scverse/SnapATAC2/discussions/116.
+    - How to set n_features: This value depends on the number of features in the input matrix.
+      It is generally recommended to set n_features to a large value (10% to 50% of the total features)
+      to retain enough features for downstream analysis.
+
+    Anti-Patterns
+    -------------
+    - Do NOT expect this function to reduce `adata.shape`; it only creates or
+      returns a feature mask.
+    - Do NOT set `max_iter > 1` unless iterative clustering-based feature
+      selection is explicitly required; this mode is slower and is not generally
+      recommended.
+    - Do NOT use very large `filter_upper_quantile` values on datasets with many
+      features unless highly accessible features should be removed aggressively.
+    - Do NOT assume blacklist overrides whitelist. If a feature appears in both,
+      the whitelist keeps it.
+    - Do NOT set n_features too small; the spectral embedding used in this package
+      usually benefits from a large number of features.
 
     Parameters
     ----------
     adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-        `adata` can also be a list of AnnData objects.
-        In this case, the function will be applied to each AnnData object in parallel.
+        AnnData, AnnDataSet, or list of AnnData objects containing a count matrix
+        in `.X`. If a list is provided, feature selection is applied to each
+        object in parallel.
     n_features
-        Number of features to keep. Note that the final number of features
-        may be smaller than this number if there is not enough features that pass
-        the filtering criteria.
+        Maximum number of features to keep. The final number can be smaller if
+        too few features pass filtering or have nonzero counts.
     filter_lower_quantile
-        Lower quantile of the feature count distribution to filter out.
-        For example, 0.005 means the bottom 0.5% features with the lowest counts will be removed.
+        Lower quantile of the feature-count distribution to remove. For example,
+        `0.005` removes the bottom 0.5% features by total count.
     filter_upper_quantile
-        Upper quantile of the feature count distribution to filter out.
-        For example, 0.005 means the top 0.5% features with the highest counts will be removed.
-        Be aware that when the number of feature is very large, the default value of 0.005 may
-        risk removing too many features.
+        Upper quantile of the feature-count distribution to remove. For example,
+        `0.005` removes the top 0.5% features by total count. When the number of
+        features is very large, this value can remove many features.
     whitelist
-        A user provided bed file containing genome-wide whitelist regions.
-        None-zero features listed here will be kept regardless of the other
-        filtering criteria.
-        If a feature is present in both whitelist and blacklist, it will be kept.
-    blacklist 
-        A user provided bed file containing genome-wide blacklist regions.
-        Features that are overlapped with these regions will be removed.
+        BED file containing regions to keep. Nonzero features overlapping these
+        regions are kept regardless of other filtering criteria. If a feature is
+        present in both `whitelist` and `blacklist`, it is kept.
+    blacklist
+        BED file containing regions to remove. Features overlapping these
+        regions are removed unless they are also kept by `whitelist`.
     max_iter
-        If greater than 1, this function will perform iterative clustering and feature selection
-        based on variable features found using previous clustering results.
-        This is similar to the procedure implemented in ArchR, but we do not recommend it,
-        see https://github.com/scverse/SnapATAC2/issues/111.
-        Default value is 1, which means no iterative clustering is performed.
+        Number of feature-selection iterations. Use `1` for count-based feature
+        selection. Values greater than `1` perform iterative clustering and
+        feature selection based on variable features found from previous
+        clustering results. This is similar to ArchR but is not generally
+        recommended; see https://github.com/scverse/SnapATAC2/issues/111.
     inplace
-        Perform computation inplace or return result.
+        If `True`, store the boolean mask in `adata.var["selected"]` and return
+        `None`. If `False`, return the mask without modifying `adata`.
     n_jobs
         Number of parallel jobs to use when `adata` is a list.
     verbose
@@ -596,10 +748,24 @@ def select_features(
     
     Returns
     -------
-    np.ndarray | None:
-        If `inplace = False`, return a boolean index mask that does filtering,
-        where `True` means that the feature is kept, `False` means the feature is removed.
-        Otherwise, store this index mask directly to `.var['selected']`.
+    np.ndarray | list[np.ndarray] | None:
+        If `inplace=False`, returns a boolean feature mask where `True` means the
+        feature is kept and `False` means the feature is removed. If `adata` is
+        a list, returns one mask per object. If `inplace=True`, returns `None`
+        and stores the mask in `.var["selected"]`.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> fragments = snap.datasets.pbmc500(downsample=True)
+    >>> data = snap.pp.import_fragments(
+    ...     fragments,
+    ...     chrom_sizes=snap.genome.hg38,
+    ...     sorted_by_barcode=False,
+    ... )
+    >>> snap.pp.add_tile_matrix(data, bin_size=500)
+    >>> snap.pp.select_features(data, n_features=250000)
+    >>> print(data.var["selected"].sum())
     """
     if isinstance(adata, list):
         result = snapatac2._utils.anndata_par(

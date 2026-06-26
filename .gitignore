@@ -30,3 +30,6 @@ _autosummary
 *.bdg
 *.bam
 *.bai
+
+# Generated llms.txt (built by scripts/build_dist.sh)
+/snapatac2/llms.txt
