@@ -12,6 +12,12 @@ from snapatac2._snapatac2 import read_motifs, PyDNAMotif
 _datasets = None
 
 def register_datasets():
+    """Create or return the cached SnapATAC2 example-dataset registry.
+
+    Use this helper indirectly through dataset accessors such as `pbmc500` or
+    `cre_HEA`. Set the `SNAP_DATA_DIR` environment variable before calling a
+    dataset accessor to override the local cache directory.
+    """
     global _datasets
     if _datasets is None:
         _datasets = pooch.create(
@@ -86,25 +92,42 @@ def register_datasets():
 
 @typechecked
 def pbmc500(type: Literal['fastq', 'bam', 'fragment'] = 'fragment', downsample: bool = False) -> Path | list[Path]:
-    """scATAC-seq dataset of 500 PBMCs from 10x Genomics.
+    """Fetch the 10x Genomics 500 PBMC scATAC-seq example dataset.
 
-    This function returns the path to the fragment file of the 10X scATAC-seq dataset
-    containing ~500 PBMCs.
+    Use this helper to download and cache the fragment, BAM, or FASTQ files for
+    a small PBMC dataset suitable for tutorials and smoke tests. Set the
+    `SNAP_DATA_DIR` environment variable before calling this function to control
+    where downloaded files are cached.
+
+    Anti-Patterns
+    -------------
+    - Do NOT use the default full fragment file for fast examples; pass
+      `downsample=True` when a small fragment file is sufficient.
+    - Do NOT set `downsample=True` with `type="bam"` or `type="fastq"`; the
+      downsampled file is only available for `type="fragment"`.
 
     Parameters
     ----------
-    type
-        One of the following:
-            - "fragment": the fragment file.
-            - "bam": bam file.
-
-    downsampled
-        Whether to return downsampled dataset.
+    type : {"fastq", "bam", "fragment"}, default: "fragment"
+        File type to fetch. Use "fragment" for a fragments TSV.GZ file, "bam"
+        for the position-sorted BAM file, or "fastq" for the extracted FASTQ
+        files from the downloaded archive.
+    downsample : bool, default: False
+        If True and `type="fragment"`, fetch the smaller downsampled fragments
+        file instead of the full fragments file.
 
     Returns
     -------
-    Path | list[Path]
-        Path to the fragment file.
+    pathlib.Path or list[pathlib.Path]
+        Path to the requested fragment or BAM file. For `type="fastq"`, returns
+        a list of paths to the extracted FASTQ files.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> fragment_file = snap.datasets.pbmc500(downsample=True)
+    >>> fragment_file.name
+    'atac_pbmc_500_downsample.tsv.gz'
     """
     datasets = register_datasets()
     if type == 'fragment':
@@ -119,20 +142,37 @@ def pbmc500(type: Literal['fastq', 'bam', 'fragment'] = 'fragment', downsample: 
 
 @typechecked
 def pbmc5k(type: Literal['fragment', 'h5ad', 'annotated_h5ad'] = 'fragment') -> Path:
-    """scATAC-seq dataset of 5k PBMCs from 10x Genomics.
+    """Fetch the 10x Genomics 5k PBMC scATAC-seq example dataset.
+
+    Use this helper to download and cache a fragments file, a preprocessed h5ad
+    file, or an annotated h5ad file for PBMC analysis examples. Set the
+    `SNAP_DATA_DIR` environment variable before calling this function to control
+    where downloaded files are cached.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass the returned h5ad path to fragment-import functions; use
+      `snap.read(...)` for `type="h5ad"` and `type="annotated_h5ad"`.
 
     Parameters
     ----------
-    type
-        One of the following:
-            - "fragment": the fragment file.
-            - "h5ad": preprocessed h5ad file.
-            - "annotated_h5ad": annotated h5ad file.
+    type : {"fragment", "h5ad", "annotated_h5ad"}, default: "fragment"
+        Dataset representation to fetch. Use "fragment" for a fragments TSV.GZ
+        file, "h5ad" for a preprocessed AnnData file, or "annotated_h5ad" for a
+        preprocessed AnnData file with cell annotations.
 
     Returns
     -------
-    Path
-        path to the file.
+    pathlib.Path
+        Path to the requested cached dataset file.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> h5ad_file = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> data = snap.read(h5ad_file, backed="r")
+    >>> data.n_obs > 0
+    True
     """
     datasets = register_datasets()
     if type == "fragment":
@@ -147,23 +187,38 @@ def pbmc10k_multiome(
     modality: Literal['ATAC', 'RNA'] = 'RNA',
     type: Literal['fragment', 'h5ad'] = 'h5ad',
 ) -> Path:
-    """Single-cell multiome dataset of 10k PBMCs from 10x Genomics.
+    """Fetch the 10x Genomics 10k PBMC multiome example dataset.
+
+    Use this helper to download and cache the paired RNA and ATAC example data
+    for multiome workflows. RNA is available as h5ad only; ATAC is available as
+    either h5ad or fragments.
+
+    Anti-Patterns
+    -------------
+    - Do NOT request `modality="RNA"` with `type="fragment"`; RNA returns the
+      RNA h5ad file regardless of `type`.
 
     Parameters
     ----------
-    modality
-        One of the following:
-            - "ATAC": ATAC-seq data.
-            - "RNA": RNA-seq data.
-    type
-        One of the following:
-            - "fragment": the fragment file.
-            - "h5ad": preprocessed h5ad file.
+    modality : {"ATAC", "RNA"}, default: "RNA"
+        Modality to fetch. Use "ATAC" for chromatin accessibility data or
+        "RNA" for gene-expression data.
+    type : {"fragment", "h5ad"}, default: "h5ad"
+        ATAC representation to fetch. This parameter is ignored when
+        `modality="RNA"` because only the RNA h5ad file is available.
 
     Returns
     -------
-    Path
-        path to the file.
+    pathlib.Path
+        Path to the requested cached dataset file.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> atac_file = snap.datasets.pbmc10k_multiome(modality="ATAC", type="h5ad")
+    >>> rna_file = snap.datasets.pbmc10k_multiome(modality="RNA")
+    >>> atac_file.suffix == rna_file.suffix == ".h5ad"
+    True
     """
     datasets = register_datasets()
     if modality == 'RNA':
@@ -175,47 +230,84 @@ def pbmc10k_multiome(
             return Path(datasets.fetch("10x-Multiome-Pbmc10k-ATAC.h5ad"))
 
 def colon() -> list[tuple[str, Path]]:
-    """scATAC-seq datasets of five colon transverse samples from [Zhang21]_.
+    """Fetch five transverse colon scATAC-seq fragment datasets.
+
+    Use this helper to download and extract the colon transverse sample archive
+    from [Zhang21]_. Each returned tuple provides a sample name and the cached
+    fragment-file path for that sample.
 
     Returns
     -------
     list[tuple[str, Path]]
-        A list of tuples, each tuple contains the sample name and the path to the fragment file.
+        Tuples containing `(sample_name, fragment_file)`, where `sample_name` is
+        a string parsed from the archive filename and `fragment_file` is a
+        pathlib.Path pointing to a fragments file.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> samples = snap.datasets.colon()
+    >>> name, fragment_file = samples[0]
+    >>> isinstance(name, str) and fragment_file.exists()
+    True
     """
     files = register_datasets().fetch("colon_transverse.tar", progressbar=True, processor = pooch.Untar())
     return [(fl.split("/")[-1].split("_rep1_fragments")[0], Path(fl)) for fl in files]
 
 def cre_HEA() -> Path:
-    """Curated cis-regulatory elements from [Zhang21]_.
+    """Fetch the curated human colon cis-regulatory element BED file.
+
+    Use this helper to download and cache the HEA cCRE set from [Zhang21]_ when
+    computing FRiP or overlap statistics against curated regulatory regions.
 
     Returns
     -------
-    Path
+    pathlib.Path
         Path to the gzipped BED file containing the cis-regulatory elements.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> cre_file = snap.datasets.cre_HEA()
+    >>> cre_file.name
+    'HEA_cCRE.bed.gz'
     """
     return Path(register_datasets().fetch("HEA_cCRE.bed.gz"))
 
 def cis_bp(unique: bool = True) -> list[PyDNAMotif]:
-    """A list of transcription factor motifs curated by the CIS-BP database.
+    """Fetch CIS-BP transcription factor motifs for motif analysis.
 
-    This function returns motifs curated from the CIS-BP database [Weirauch14]_.
-    The motifs can be used to scan the genome for potential binding sites and
-    to perform motif enrichment analysis.
+    Use these motifs from [Weirauch14]_ to scan genomic sequences or run motif
+    enrichment. When `unique=True`, this function keeps only the highest
+    information-content motif for each transcription factor name.
+
+    Anti-Patterns
+    -------------
+    - Do NOT set `unique=False` when downstream code expects one motif per
+      transcription factor; CIS-BP can contain multiple motifs per factor.
 
     Parameters
     ----------
-    unique
-        A transcription factor may have multiple motifs. If `unique=True`, 
-        only the motifs with the highest information content will be selected.
+    unique : bool, default: True
+        If True, return one motif per transcription factor by selecting the motif
+        with the highest information content. If False, return all CIS-BP motifs.
 
     Returns
     -------
     list[PyDNAMotif]
-        A list of motifs.
+        Motif objects with `name` set to the transcription factor name parsed
+        from the motif identifier.
 
     See Also
     --------
     :func:`~snapatac2.tl.motif_enrichment`: compute motif enrichment.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> motifs = snap.datasets.cis_bp(unique=True)
+    >>> len(motifs) > 0
+    True
     """
     motifs = read_motifs(register_datasets().fetch("cisBP_human.meme"))
     for motif in motifs:
@@ -233,21 +325,27 @@ def cis_bp(unique: bool = True) -> list[PyDNAMotif]:
     return motifs
 
 def Meuleman_2020() -> list[PyDNAMotif]:
-    """A list of transcription factor motifs curated from [Meuleman20]_.
+    """Fetch grouped transcription factor motifs from Meuleman 2020.
 
-    This function returns motifs curated from [Meuleman20]_.
-    The motifs in this list have been grouped into families.
-    The motifs can be used to scan the genome for potential binding sites and
-    to perform motif enrichment analysis.
+    Use these curated motifs from [Meuleman20]_ to scan genomic sequences or run
+    motif enrichment. Each returned motif has `name` set to the parsed motif name
+    and `family` set to the motif-family label parsed from the motif identifier.
 
     Returns
     -------
     list[PyDNAMotif]
-        A list of motifs.
+        Motif objects with populated `name` and `family` attributes.
 
     See Also
     --------
     :func:`~snapatac2.tl.motif_enrichment`: compute motif enrichment.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> motifs = snap.datasets.Meuleman_2020()
+    >>> hasattr(motifs[0], "family")
+    True
     """
     motifs = read_motifs(register_datasets().fetch("Meuleman_2020.meme"))
     for motif in motifs:

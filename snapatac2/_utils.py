@@ -5,12 +5,30 @@ from anndata import AnnData
 import snapatac2._snapatac2 as internal
 
 def is_anndata(data) -> bool:
+    """Check whether an object is an AnnData-like object supported by SnapATAC2.
+
+    Use this helper before dispatching code paths that require either in-memory
+    AnnData, backed SnapATAC2 AnnData, or AnnDataSet objects.
+    """
     return isinstance(data, AnnData) or isinstance(data, internal.AnnData) or isinstance(data, internal.AnnDataSet)
 
 def anndata_par(adatas, func, n_jobs=4):
+    """Apply a function to multiple AnnData objects with safe parallel dispatch.
+
+    Use this helper when a preprocessing or metrics function receives a list of
+    AnnData objects. In-memory AnnData objects are processed serially; backed
+    SnapATAC2 AnnData objects are closed, processed in worker processes, and
+    reopened after completion.
+    """
     return anndata_ipar(list(enumerate(adatas)), lambda x: func(x[1]), n_jobs=n_jobs)
 
 def anndata_ipar(inputs, func, n_jobs=4):
+    """Apply an indexed function to multiple AnnData objects.
+
+    Use this helper when the worker function needs both the object index and the
+    AnnData object. It preserves input order and reopens backed objects after
+    multiprocessing finishes.
+    """
     from tqdm import tqdm
     
     exist_in_memory_adata = False
@@ -48,6 +66,12 @@ def anndata_ipar(inputs, func, n_jobs=4):
         return result
 
 def get_file_format(suffix):
+    """Infer genomic track format and compression from a file suffix.
+
+    Use this helper before exporting coverage or fragments to determine whether
+    a suffix denotes bigWig, bedGraph, gzip compression, or zstandard
+    compression.
+    """
     suffix = suffix.lower()
     _suffix = suffix
 
@@ -89,6 +113,11 @@ def chunks(mat, chunk_size: int):
         yield mat[i:j, :]
 
 def find_elbow(x, saturation=0.01):
+    """Find the first saturation point in a decreasing sequence.
+
+    Use this helper to locate the elbow where incremental gains fall below a
+    fraction of accumulated gain.
+    """
     accum_gap = 0
     for i in range(1, len(x)):
         gap = x[i-1] - x[i]
@@ -98,6 +127,12 @@ def find_elbow(x, saturation=0.01):
     return None
 
 def fetch_seq(fasta, region):
+    """Fetch a genomic sequence from a FASTA object for one region string.
+
+    Use this helper with region strings formatted as `chrom:start-end`. The
+    function raises an error if the retrieved sequence length does not match the
+    requested interval length.
+    """
     chr, x = region.split(':')
     start, end = x.split('-')
     start = int(start)

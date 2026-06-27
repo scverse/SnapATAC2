@@ -18,28 +18,47 @@ def motif_enrichment(
     method: Literal['binomial', 'hypergeometric'] | None = None,
 ) -> dict[str, 'polars.DataFrame']:
     """
-    Identify enriched transcription factor motifs.
+    Test transcription factor motifs for enrichment in region sets.
+
+    Use this function to compare motif occurrence in foreground region groups
+    against either an explicit background or the union of all foreground regions.
+
+    Anti-Patterns
+    -------------
+    - Do NOT use `method="hypergeometric"` with foreground regions that are not
+      contained in `background`.
+    - Do NOT pass region strings from a genome build different from
+      `genome_fasta`.
 
     Parameters
     ----------
-    motifs
-        A list of transcription factor motifs.
-    regions
-        Groups of regions. Each group will be tested independently against the background.
-    genome_fasta
-        A fasta file containing the genome sequences or a Genome object.
-    background
-        A list of regions to be used as the background. If None, the union of elements
-        in `regions` will be used as the background.
-    method
-        Statistical testing method: "binomial" or "hypergeometric".
-        To use "hypergeometric", the testing regions must be a subset of
-        background regions.
+    motifs : list[PyDNAMotif]
+        Motifs to scan in foreground and background sequences.
+    regions : dict[str, list[str]]
+        Foreground genomic regions keyed by group name. Region strings must use
+        `chrom:start-end` coordinates.
+    genome_fasta : pathlib.Path | Genome
+        Genome FASTA path, or a Genome object containing a FASTA path.
+    background : list[str] | None
+        Background regions. If None, use the union of all foreground regions.
+    method : {"binomial", "hypergeometric"} | None
+        Statistical test. If None, use `"hypergeometric"` when `background` is
+        None and `"binomial"` otherwise.
 
     Returns
     -------
-    dict[str, pl.DataFrame]:
-        Dataframes containing the enrichment analysis results for different groups.
+    dict[str, polars.DataFrame]
+        Enrichment tables keyed by group name. Each table contains motif id,
+        name, family, log2 fold change, p-value, and adjusted p-value.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> motifs = snap.datasets.cis_bp(unique=True)
+    >>> regions = {"set1": ["chr1:10000-10200", "chr1:20000-20200"]}
+    >>> result = snap.tl.motif_enrichment(motifs[:2], regions, snap.genome.hg38)
+    >>> list(result)
+    ['set1']
     """
     from pyfaidx import Fasta
     from tqdm import tqdm

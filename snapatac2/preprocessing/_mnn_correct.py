@@ -22,43 +22,69 @@ def mnc_correct(
     n_jobs: int = 8,
 ) -> np.ndarray | None:
     """
-    A modified MNN-Correct algorithm based on cluster centroid.
+    Correct batch effects with centroid-based mutual nearest neighbors.
+
+    Use this function after dimensionality reduction and before neighbor-graph
+    construction to align cells across batches. The method clusters each batch,
+    identifies mutual nearest cluster centroids, and projects cells along the
+    resulting correction vectors.
+
+    Anti-Patterns
+    -------------
+    - Do NOT run this function on raw count matrices unless distances between raw
+      counts are the intended analysis; use a reduced representation such as
+      `X_spectral`.
+    - Do NOT pass `batch` as a column name when `adata` is a NumPy array; provide
+      one label per observation instead.
 
     Parameters
     ----------
-    data
-        Matrice or AnnData object. Matrices should be shaped like n_obs x n_vars.
+    adata
+        AnnData-like object with `use_rep` in `.obsm`, AnnDataSet-like object,
+        or a NumPy array of shape `n_obs` x `n_components`.
     batch
-        Batch labels for cells, stored as a list of strings, where each string
-        corresponds to the batch label for a cell. Alternatively, `batch` can be
-        a string, and in this case labels will be obtained from `.obs[`batch`]`.
+        Column name in `.obs` that identifies batches, or a list of labels with
+        one entry per observation.
     n_neighbors
-        Number of mutual nearest neighbors.
+        Number of nearest centroids to inspect when finding mutual nearest
+        neighbors.
     n_clusters
-        Number of clusters
+        Maximum number of clusters to form in each batch.
     n_iter
-        Number of iterations.
+        Number of correction iterations.
     use_rep
-        Use the indicated representation in `.obsm`.
+        Key in `.obsm` containing the input embedding.
     use_dims
-        Use these dimensions in `use_rep`.
+        Dimensions of `use_rep` or the input array to use. If an integer, use the
+        first `use_dims` columns. If a list, use those column indices.
     groupby
-        If specified, split the data into groups and perform batch correction
-        on each group separately.
+        Column name or labels used to split cells and run correction
+        independently within each group.
     key_added
-        If specified, add the result to ``adata.obsm`` with this key. Otherwise,
-        it will be stored in ``adata.obsm[use_rep + "_mnn"]``.
+        Key used to store the corrected embedding. If `None`, store it in
+        `.obsm[use_rep + "_mnn"]`.
     inplace
-        Whether to store the result in the anndata object.
+        If `True` and `adata` is AnnData-like, store the corrected embedding in
+        `.obsm`. Ignored for NumPy input.
     n_jobs
-        Number of jobs to use for parallelization.
+        Number of worker processes used when `groupby` is specified.
 
     Returns
     -------
     np.ndarray | None
-        if `inplace=True` it updates adata with the field
-        ``adata.obsm[`use_rep`_mnn]``, containing adjusted principal components.
-        Otherwise, it returns the result as a numpy array.
+        Corrected embedding of shape `n_obs` x `n_selected_components` when
+        `inplace=False` or when `adata` is a NumPy array. Returns `None` when
+        `inplace=True` and stores the result in `.obsm`.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import snapatac2 as snap
+    >>> X = np.array([[0.0, 0.1], [0.2, 0.0], [3.0, 3.1], [3.2, 3.0]])
+    >>> batch = ["a", "a", "b", "b"]
+    >>> corrected = snap.pp.mnc_correct(X, batch=batch, n_clusters=2, inplace=False)
+    >>> corrected.shape
+    (4, 2)
     """
     if is_anndata(adata):
         mat = adata.obsm[use_rep]

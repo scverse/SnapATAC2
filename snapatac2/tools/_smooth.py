@@ -12,21 +12,43 @@ def smooth(
     inplace: bool = True,
 ) -> np.ndarray | None:
     """
-    Smoothing.
+    Smooth cell-by-feature values over a nearest-neighbor graph.
+
+    Use this function to diffuse `.X` values through the cell graph stored in
+    `adata.obsp`, or through a sparse distance matrix passed directly.
+
+    Anti-Patterns
+    -------------
+    - Do NOT run this before constructing a neighbor graph when `distances` is a
+      string key.
+    - Do NOT expect embeddings to be written; smoothing updates `.X` when
+      `inplace=True`.
 
     Parameters
     ----------
-    adata
-        AnnData or AnnDataSet object.
-    inplace
-        Whether to store the result in the anndata object.
+    adata : AnnData | AnnDataSet | scipy.sparse.spmatrix
+        Annotated data object whose `.X` matrix is smoothed, or a sparse matrix
+        to smooth when `inplace=False`.
+    distances : str | scipy.sparse.spmatrix | None
+        Neighbor distance graph. If None, use `adata.obsp["distances"]`. If a
+        string, use `adata.obsp[distances]`.
+    inplace : bool
+        If True, store the smoothed matrix in `adata.X`; if False, return it.
 
     Returns
     -------
-    if `inplace=True` it stores Spectral embedding of data in the field
-    `adata.obsm["X_spectral"]`,
-    `adata.uns["spectral_eigenvalue"]`,
-    otherwise it returns the result as a numpy array.
+    np.ndarray | scipy.sparse.spmatrix | None
+        If `inplace=True`, updates `adata.X` and returns None. If
+        `inplace=False`, returns the smoothed matrix.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> snap.pp.knn(adata, use_rep="X_spectral")
+    >>> snap.tl.smooth(adata)
+    >>> adata.X.shape == (adata.n_obs, adata.n_vars)
+    True
     """
  
     if distances is None: distances = "distances"
@@ -39,6 +61,11 @@ def smooth(
         return data
 
 def make_diffuse_operator(knn_d, t = 3):
+    """Create a diffusion operator from a nearest-neighbor distance matrix.
+
+    Use this helper to convert a KNN distance graph into a Markov matrix and
+    raise it to `t` diffusion steps before smoothing feature values.
+    """
     return make_markov_matrix(knn_d)**t
 
 def make_markov_matrix(knn_d):

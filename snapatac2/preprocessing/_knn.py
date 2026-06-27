@@ -17,38 +17,57 @@ def knn(
     random_state: int = 0,
 ) -> csr_matrix | None:
     """
-    Compute a neighborhood graph of observations.
+    Build a Euclidean k-nearest-neighbor graph for observations.
 
-    Computes a neighborhood graph of observations stored in `adata` using
-    the method specified by `method`. The distance metric used is Euclidean.
+    Use this function after dimensionality reduction to construct the graph used
+    by downstream clustering, embedding, or graph-based analysis. When `adata` is
+    an AnnData-like object, the input matrix is read from `adata.obsm[use_rep]`.
+    When `adata` is a NumPy array, the array itself is used and the result is
+    always returned.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass a raw count matrix unless Euclidean distances on counts are the
+      intended analysis; use a reduced representation such as `X_spectral`.
+    - Do NOT expect `random_state` to make `method="hora"` deterministic; the
+      HNSW backend currently ignores this value.
 
     Parameters
     ----------
     adata
-        Annotated data matrix or numpy array.
+        AnnData-like object with `use_rep` in `.obsm`, AnnDataSet-like object,
+        or a NumPy array of shape `n_obs` x `n_features`.
     n_neighbors
-        The number of nearest neighbors to be searched.
+        Number of nearest neighbors to store for each observation.
     use_dims
-        The dimensions used for computation.
+        Dimensions of `use_rep` or the input array to use. If an integer, use the
+        first `use_dims` columns. If a list, use those column indices.
     use_rep
-        The key for the matrix
+        Key in `.obsm` containing the representation to search.
     method
-        Can be one of the following:
-        - 'kdtree': use the kdtree algorithm to find the nearest neighbors.
-        - 'hora': use the HNSW algorithm to find the approximate nearest neighbors.
-        - 'pynndescent': use the pynndescent algorithm to find the approximate nearest neighbors.
+        Neighbor-search backend. Use `"kdtree"` for exact search, `"hora"` for
+        approximate HNSW search, or `"pynndescent"` for approximate NNDescent.
     inplace
-        Whether to store the result in the anndata object.
+        If `True` and `adata` is AnnData-like, store the graph in
+        `.obsp["distances"]`. Ignored for NumPy input.
     random_state
-        Random seed for approximate nearest neighbor search.
-        Note that this is only used when `method='pynndescent'`.
-        Currently 'hora' does not support random seed, so the result of 'hora' is not reproducible.
+        Random seed used only by `method="pynndescent"`.
 
     Returns
     -------
     csr_matrix | None
-        if `inplace=True`, store KNN in `.obsp['distances']`.
-        Otherwise, return a sparse matrix.
+        Sparse distance matrix of shape `n_obs` x `n_obs` when `inplace=False`
+        or when `adata` is a NumPy array. Returns `None` when `inplace=True` and
+        stores the matrix in `.obsp["distances"]`.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import snapatac2 as snap
+    >>> X = np.array([[0.0, 0.0], [0.1, 0.0], [2.0, 2.0], [2.1, 2.0]])
+    >>> graph = snap.pp.knn(X, n_neighbors=2, method="kdtree")
+    >>> graph.shape
+    (4, 4)
     """
     if is_anndata(adata):
         data = adata.obsm[use_rep]

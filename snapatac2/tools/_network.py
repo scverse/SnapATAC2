@@ -49,30 +49,47 @@ def init_network_from_annotation(
     coding_gene_only: bool = True,
 ) -> rx.PyDiGraph:
     """
-    Build CRE-gene network from gene annotations.
+    Build a region-to-gene network from gene annotations.
 
-    Link CREs to genes if they are close to genes' promoter regions.
+    Use this function to connect candidate cis-regulatory elements to genes when
+    the regions fall within an annotation-derived regulatory domain around each
+    transcription start site.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass regions from a genome build different from `anno_file`.
+    - Do NOT assume edges are functional regulatory links; they encode genomic
+      proximity only until scores are added.
 
     Parameters
     ----------
-    regions
-        A list of peaks/regions, e.g., `["chr1:100-1000", "chr2:55-222"]`.
-    anno_file
-        The GFF file containing the transcript level annotations.
-    upstream
-        Upstream extension to the transcription start site.
-    downstream
-        Downstream extension to the transcription start site.
-    id_type
-        "gene_name", "gene_id" or "transcript_id".
-    coding_gene_only
-        Retain only coding genes in the network.
+    regions : list[str]
+        Candidate regulatory regions in `chrom:start-end` format.
+    anno_file : pathlib.Path | Genome
+        GFF/GTF annotation file, or a Genome object containing the annotation.
+    upstream : int
+        Bases upstream of each transcription start site included in the
+        regulatory domain.
+    downstream : int
+        Bases downstream of each transcription start site included in the
+        regulatory domain.
+    id_type : {"gene_name", "gene_id", "transcript_id"}
+        Annotation identifier stored on gene nodes.
+    coding_gene_only : bool
+        If True, retain only protein-coding genes.
 
     Returns
     -------
-    rx.PyDiGraph:
-        A network where peaks/regions point towards genes if they are within genes'
-        regulatory domains.
+    rustworkx.PyDiGraph
+        Directed graph whose region nodes point to nearby gene nodes.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> regions = ["chr1:10000-10500", "chr1:20000-20500"]
+    >>> network = snap.tl.init_network_from_annotation(regions, snap.genome.hg38)
+    >>> network.num_nodes() >= 0
+    True
     """
     if isinstance(anno_file, Genome):
         anno_file = anno_file.annotation
@@ -106,29 +123,44 @@ def add_cor_scores(
     overwrite: bool = False,
 ):
     """
-    Compute correlation scores for any two connected nodes in the network.
+    Add Spearman correlation scores to network edges.
 
-    This function can be used to compute correlation scores for any type of
-    associations. There are typically three types of edges in the network:
+    Use this function to score existing region-gene, gene-gene, or motif-region
+    associations from matched cell-by-peak and cell-by-gene matrices.
 
-    1. Region -> gene: CREs regulate target genes.
-    2. Gene -> gene: genes regulate other genes.
-    3. Gene -> region: TFs bind to CREs.
+    Anti-Patterns
+    -------------
+    - Do NOT pass matrices with different cell order or different `obs_names`.
+    - Do NOT expect missing edges to be created; only existing network edges are
+      scored.
 
     Parameters
     ----------
-    network
-        network
-    gene_mat
-        AnnData or AnnDataSet object storing the cell by gene count matrix,
-        where the `.var_names` contains genes.
-    peak_mat
-        AnnData or AnnDataSet object storing the cell by peak count matrix,
-        where the `.var_names` contains peaks.
-    select
-        Run this for selected genes only.
-    overwrite
-        Whether to overwrite existing records.
+    network : rustworkx.PyDiGraph
+        Graph containing `NodeData` nodes and `LinkData` edges.
+    gene_mat : AnnData | AnnDataSet | None
+        Cell-by-gene matrix with gene names in `.var_names`.
+    peak_mat : AnnData | AnnDataSet | None
+        Cell-by-region matrix with region names in `.var_names`.
+    select : list[str] | None
+        Gene ids to score. If None, score all eligible target genes.
+    overwrite : bool
+        If True, recompute existing `cor_score` values.
+
+    Returns
+    -------
+    None
+        Updates edge `cor_score` attributes in `network` in place.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> gene_mat = snap.pp.make_gene_matrix(adata, snap.genome.hg38)
+    >>> network = snap.tl.init_network_from_annotation(list(adata.var_names[:10]), snap.genome.hg38)
+    >>> snap.tl.add_cor_scores(network, peak_mat=adata, gene_mat=gene_mat)
+    >>> network.num_edges() >= 0
+    True
     """
     from tqdm import tqdm
 
@@ -165,37 +197,62 @@ def add_regr_scores(
     overwrite: bool = False,
 ):
     """
-    Perform regression analysis for nodes and their parents in the network.
+    Add regression-based importance scores to network edges.
+
+    Use this function to model each target node from its parent nodes and store
+    per-edge regression scores plus target-node model fitness.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass peak and gene matrices with different `obs_names`.
+    - Do NOT set `use_gpu=True` unless the selected regression backend and
+      environment support GPU execution.
+    - Do NOT expect unsupported `method` values to fall back automatically.
 
     Parameters
     ----------
-    network
-        network
-    peak_mat
-        AnnData or AnnDataSet object storing the cell by peak count matrix,
-        where the `.var_names` contains peaks.
-    gene_mat
-        AnnData or AnnDataSet object storing the cell by gene count matrix,
-        where the `.var_names` contains genes.
-    select
-        Run this for selected genes only.
-    method
-        Regresson model.
-    scale_X
-        Whether to scale the features.
-    scale_Y
-        Whether to scale the response variable.
-    alpha
-        Constant that multiplies the penalty terms in 'elastic_net'.
-    l1_ratio
-        Used in 'elastic_net'. The ElasticNet mixing parameter,
+    network : rustworkx.PyDiGraph
+        Graph containing `NodeData` nodes and `LinkData` edges.
+    peak_mat : AnnData | AnnDataSet | None
+        Cell-by-region matrix with region names in `.var_names`.
+    gene_mat : AnnData | AnnDataSet | None
+        Cell-by-gene matrix with gene names in `.var_names`.
+    select : list[str] | None
+        Gene ids to score. If None, score all eligible target genes.
+    method : {"gb_tree", "elastic_net"}
+        Regression backend used to score parent nodes.
+    scale_X : bool
+        If True, standardize predictor values before fitting.
+    scale_Y : bool
+        If True, standardize response values before fitting.
+    alpha : float
+        Penalty strength for `"elastic_net"`.
+    l1_ratio : float
+        ElasticNet mixing parameter,
         with `0 <= l1_ratio <= 1`. For `l1_ratio = 0` the penalty is an L2 penalty.
         For `l1_ratio = 1` it is an L1 penalty. For `0 < l1_ratio < 1`,
         the penalty is a combination of L1 and L2.
-    use_gpu
-        Whether to use gpu
-    overwrite
-        Whether to overwrite existing records.
+    use_gpu : bool
+        If True, request GPU tree fitting for `"gb_tree"`.
+    overwrite : bool
+        If True, recompute existing `regr_score` values.
+
+    Returns
+    -------
+    rustworkx.PyDiGraph | None
+        Returns `network` only when the graph has no edges. Otherwise, updates
+        edge `regr_score` and node `regr_fitness` attributes in place and returns
+        None.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> gene_mat = snap.pp.make_gene_matrix(adata, snap.genome.hg38)
+    >>> network = snap.tl.init_network_from_annotation(list(adata.var_names[:10]), snap.genome.hg38)
+    >>> snap.tl.add_regr_scores(network, peak_mat=adata, gene_mat=gene_mat, method="elastic_net")
+    >>> network.num_edges() >= 0
+    True
     """
     from tqdm import tqdm
 
@@ -232,18 +289,43 @@ def add_tf_binding(
     genome_fasta: Path | Genome,
     pvalue: float = 1e-5,
 ):
-    """Add TF motif binding information.
+    """Add motif-to-region edges to a regulatory network.
+
+    Use this function after creating a region-gene network to scan region
+    sequences for transcription factor motif matches and add motif nodes that
+    point to bound regions.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass a FASTA from a different genome build than the network region
+      coordinates.
+    - Do NOT expect duplicate motif nodes to be merged with existing gene nodes;
+      motif nodes are added separately with type `"motif"`.
 
     Parameters
     ----------
-    network
-        Network
-    motifs
-        TF motifs
-    genome_fasta
-        A fasta file containing the genome sequences or a Genome object.
-    pvalue
-        P-value threshold for motif binding.
+    network : rustworkx.PyDiGraph
+        Graph containing region nodes with ids in `chrom:start-end` format.
+    motifs : list[PyDNAMotif]
+        Motifs to scan against region sequences.
+    genome_fasta : pathlib.Path | Genome
+        Genome FASTA path, or a Genome object containing a FASTA path.
+    pvalue : float
+        Motif match p-value threshold.
+
+    Returns
+    -------
+    None
+        Adds motif nodes and motif-to-region edges to `network` in place.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> motifs = snap.datasets.cis_bp(unique=True)
+    >>> network = snap.tl.init_network_from_annotation(["chr1:10000-10500"], snap.genome.hg38)
+    >>> snap.tl.add_tf_binding(network, motifs=motifs[:2], genome_fasta=snap.genome.hg38)
+    >>> network.num_nodes() >= 0
+    True
     """
     from pyfaidx import Fasta
     from tqdm import tqdm
@@ -266,17 +348,36 @@ def add_tf_binding(
             )
 
 def link_tf_to_gene(network: rx.PyDiGraph) -> rx.PyDiGraph:
-    """Contruct a genetic network by linking TFs to target genes.
-    
-    Convert the network to a genetic network.
-    :func:`~snapatac2.tl.add_tf_binding` must be ran first in order to use this function.
+    """Create a transcription-factor-to-gene network.
+
+    Use this function after :func:`add_tf_binding` has added motif-to-region
+    edges to a region-gene network. A TF is linked to a gene when its motif binds
+    a region that is linked to that gene.
+
+    Anti-Patterns
+    -------------
+    - Do NOT call this before :func:`add_tf_binding`; no motif-to-region paths
+      will exist.
+    - Do NOT treat the returned graph as weighted unless you add scores after
+      conversion; new TF-gene edges contain default `LinkData`.
 
     Parameters
     ----------
+    network : rustworkx.PyDiGraph
+        Graph containing gene, region, and motif nodes.
 
     Returns 
     -------
     rx.PyDiGraph
+        Directed graph containing TF gene nodes linked to target gene nodes.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> network = snap.tl.init_network_from_annotation(["chr1:10000-10500"], snap.genome.hg38)
+    >>> tf_network = snap.tl.link_tf_to_gene(network)
+    >>> tf_network.num_edges() >= 0
+    True
     """
     def aggregate(edge_data):
         best = 0
@@ -336,22 +437,42 @@ def prune_network(
     remove_isolates: bool = True,
 ) -> rx.PyDiGraph:
     """
-    Prune the network.
+    Filter nodes and edges from a network.
+
+    Use this function to build a retained subgraph from node and edge predicates,
+    optionally dropping isolated nodes after filtering.
+
+    Anti-Patterns
+    -------------
+    - Do NOT mutate node or edge attributes inside filter callbacks; predicates
+      should only decide whether to retain items.
+    - Do NOT assume node indices are preserved; the returned graph has new
+      rustworkx node indices.
 
     Parameters
     ----------
-    network
-        network
-    node_filter
-        Node filter function.
-    edge_filter
-        Edge filter function.
-    remove_isolates
-        Whether to remove isolated nodes.
+    network : rustworkx.PyDiGraph
+        Input graph.
+    node_filter : Callable[[NodeData], bool] | None
+        Predicate returning True for nodes to retain. If None, retain all nodes.
+    edge_filter : Callable[[int, int, LinkData], bool] | None
+        Predicate returning True for edges to retain. Receives original source
+        index, target index, and edge data. If None, retain all eligible edges.
+    remove_isolates : bool
+        If True, remove nodes with no incoming or outgoing edges after filtering.
 
     Returns
     -------
     rx.PyDiGraph
+        Filtered graph.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> network = snap.tl.init_network_from_annotation(["chr1:10000-10500"], snap.genome.hg38)
+    >>> pruned = snap.tl.prune_network(network, node_filter=lambda node: node.type != "motif")
+    >>> pruned.num_nodes() >= 0
+    True
     """
     graph = rx.PyDiGraph()
     
@@ -383,6 +504,43 @@ def pagerank(
     node_weights: str | list[float] | None = None,
     edge_weights: str | list[float] | None = None,
 ) -> list[tuple[str, float]]:
+    """
+    Rank regulator nodes with personalized PageRank.
+
+    Use this function to score nodes with outgoing edges, typically transcription
+    factors, after constructing a directed regulatory network.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass weight attribute names that are absent from nodes or edges.
+    - Do NOT interpret PageRank scores as causal effects; they are graph-derived
+      centrality scores.
+
+    Parameters
+    ----------
+    network : rustworkx.PyDiGraph
+        Directed graph containing nodes with `id` attributes.
+    node_weights : str | list[float] | None
+        Node personalization weights. If a string, read that attribute from each
+        node. If a list, use it directly in graph node order. If None, use
+        unweighted PageRank.
+    edge_weights : str | list[float] | None
+        Edge weights. If a string, read that attribute from each edge. If a list,
+        use it directly in graph edge order. If None, use unweighted edges.
+
+    Returns
+    -------
+    list[tuple[str, float]]
+        `(node_id, pagerank_score)` pairs for nodes with outgoing edges.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> network = snap.tl.init_network_from_annotation(["chr1:10000-10500"], snap.genome.hg38)
+    >>> ranks = snap.tl.pagerank(network)
+    >>> isinstance(ranks, list)
+    True
+    """
     tfs = {network[nid].id for nid in network.node_indices() if network.out_degree(nid) > 0}
     g = _to_igraph(network, node_weights, edge_weights, True)
     pagerank_scores = g.personalized_pagerank(

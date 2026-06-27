@@ -7,6 +7,39 @@ import snapatac2
 import snapatac2._snapatac2
 
 def filter_kwargs(func, kwargs_dict):
+    """
+    Keep only keyword arguments accepted by a target function.
+
+    Use this helper inside recipes to forward a shared keyword dictionary to
+    multiple functions without passing names that the target function cannot
+    accept.
+
+    Anti-Patterns
+    -------------
+    - Do NOT use this helper to validate required arguments; it only removes
+      unsupported keyword names.
+
+    Parameters
+    ----------
+    func
+        Callable whose signature defines the accepted keyword names.
+    kwargs_dict
+        Dictionary of candidate keyword arguments.
+
+    Returns
+    -------
+    dict
+        Dictionary containing only entries from `kwargs_dict` whose keys appear
+        in `func`'s signature.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> def target(a, b=1):
+    ...     return a + b
+    >>> snap.pp.filter_kwargs(target, {"a": 1, "b": 2, "c": 3})
+    {'a': 1, 'b': 2}
+    """
     import inspect
     signature = inspect.signature(func)
     accepted_params = set(signature.parameters.keys())
@@ -21,34 +54,59 @@ def recipe_10x_metrics(
     **kwargs,
 ) -> dict:
     """
-    Preprocess raw Bam files and generate a set of QC metrics similar to the
-    10x Genomics pipeline.
+    Generate 10x-style ATAC QC metrics from a raw BAM file.
+
+    Use this recipe to convert a BAM file to fragments, import the fragments into
+    an h5ad file, compute targeting metrics, call peaks when needed, and summarize
+    library-level QC values in one dictionary. Keyword arguments are forwarded to
+    the individual preprocessing and metric functions when their signatures accept
+    those names.
+
+    Anti-Patterns
+    -------------
+    - Do NOT use this recipe when you only need an existing fragment file
+      imported; call `snap.pp.import_fragments` directly.
+    - Do NOT omit required downstream inputs such as `chrom_sizes` and
+      `gene_anno`; they are supplied through `**kwargs` and used by the called
+      functions.
 
     Parameters
     ----------
     bam_file
         Path to the input BAM file.
     output_fragment_file
-        Path to the output fragment file.
+        Path where the generated fragment file is written.
     output_h5ad_file
-        Path to the output h5ad file.
+        Path where the intermediate AnnData object is written.
     peaks
-        Path to the peak file or a list of peak regions. If None, MACS3 will be
-        used to call peaks. Default is None.
+        Path to a BED-like peak file or a list of peak regions formatted as
+        `"chrom:start-end"`. If `None`, MACS3 is run to call peaks.
     **kwargs
-        Additional arguments for the functions used in the recipe.
+        Additional arguments accepted by functions used in the recipe, including
+        `make_fragment_file`, `import_fragments`, `metrics.tsse`, and related
+        calls.
 
     Returns
     -------
     dict
-        A dictionary containing the QC metrics.
+        Nested dictionary containing sequencing, cell, library-complexity,
+        mapping, and targeting QC metrics.
 
     Examples
     --------
     >>> import snapatac2 as snap
     >>> bam_file = snap.datasets.pbmc500(type='bam')
-    >>> metrics = snap.pp.recipe_10x_metrics(bam_file, 'fragments.tsv.gz', 'data.h5ad', barcode_tag='CB', source='10x', chrom_sizes=snap.genome.hg38, gene_anno=snap.genome.hg38)
-    >>> print(metrics)
+    >>> metrics = snap.pp.recipe_10x_metrics(
+    ...     bam_file,
+    ...     'fragments.tsv.gz',
+    ...     'data.h5ad',
+    ...     barcode_tag='CB',
+    ...     source='10x',
+    ...     chrom_sizes=snap.genome.hg38,
+    ...     gene_anno=snap.genome.hg38,
+    ... )
+    >>> sorted(metrics)
+    ['Cells', 'Library Complexity', 'Mapping', 'Sequencing', 'Targeting']
     """
     qc = {
         "Sequencing": {},

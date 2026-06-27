@@ -20,47 +20,55 @@ def leiden(
     inplace: bool = True,
 ) -> np.ndarray | None:
     """
-    Cluster cells into subgroups [Traag18]_.
+    Cluster cells with the Leiden community detection algorithm.
 
-    Cluster cells using the Leiden algorithm [Traag18]_,
-    an improved version of the Louvain algorithm [Blondel08]_.
-    It has been proposed for single-cell analysis by [Levine15]_.
-    This requires having ran :func:`~snapatac2.pp.knn`.
+    Use this function after building a nearest-neighbor graph with
+    :func:`snapatac2.pp.knn`, or pass a sparse adjacency matrix directly.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass raw embeddings as `adata`; pass an AnnData object with
+      `adata.obsp["distances"]` or a sparse graph matrix.
+    - Do NOT expect clusters smaller than `min_cluster_size` to keep their
+      original labels; they are relabeled as `"-1"`.
 
     Parameters
     ----------
-    adata
-        The annotated data matrix or sparse adjacency matrix of the graph,
-        defaults to neighbors connectivities.
-    resolution
-        A parameter value controlling the coarseness of the clustering.
-        Higher values lead to more clusters.
-        Set to `None` if overriding `partition_type`
-        to one that doesn't accept a `resolution_parameter`.
-    objective_function
-        whether to use the Constant Potts Model (CPM) or modularity.
-        Must be either "CPM" or "modularity".
-    min_cluster_size
-        The minimum size of clusters.
-    n_iterations
-        How many iterations of the Leiden clustering algorithm to perform.
-        Positive values above 2 define the total number of iterations to perform,
-        -1 has the algorithm run until it reaches its optimal clustering.
-    random_state
-        Change the initialization of the optimization.
-    key_added
-        `adata.obs` key under which to add the cluster labels.
-    weighted
-        Whether to use the edge weights in the graph
-    inplace
-        Whether to store the result in the anndata object.
+    adata : AnnData | AnnDataSet | scipy.sparse.spmatrix
+        Annotated data object containing `adata.obsp["distances"]`, or a sparse
+        graph adjacency matrix.
+    resolution : float
+        Clustering resolution. Larger values usually produce more clusters.
+    objective_function : {"CPM", "modularity"}
+        Leiden objective function.
+    min_cluster_size : int
+        Minimum retained cluster size. Smaller clusters are labeled `"-1"`.
+    n_iterations : int
+        Number of Leiden optimization iterations. Use `-1` to run until
+        convergence.
+    random_state : int
+        Seed for Leiden initialization.
+    key_added : str
+        Key in `adata.obs` used to store cluster labels.
+    weighted : bool
+        If True, transform graph distances into edge weights before clustering.
+    inplace : bool
+        If True, store labels in `adata.obs[key_added]`; if False, return them.
 
     Returns
     -------
     np.ndarray | None
-        If `inplace=True`, update `adata.obs[key_added]` to store an array of
-        dim (number of samples) that stores the subgroup id
-        (`'0'`, `'1'`, ...) for each cell. Otherwise, returns the array directly.
+        If `inplace=True`, stores categorical labels in `adata.obs[key_added]`
+        and returns None. If `inplace=False`, returns a string array of labels.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> snap.pp.knn(adata, use_rep="X_spectral")
+    >>> snap.tl.leiden(adata, resolution=1.0)
+    >>> "leiden" in adata.obs
+    True
     """
     from igraph import set_random_number_generator
     from collections import Counter
@@ -124,37 +132,56 @@ def leiden_sweep(
     n_jobs: int = 16,
 ):
     """
-    Perform a sweep over multiple resolutions for Leiden clustering and compute silhouette scores.
+    Score Leiden clustering across multiple resolutions.
+
+    Use this function to choose a Leiden resolution by comparing silhouette
+    scores computed from an embedding while clustering the existing graph.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass an AnnData object without `adata.obsp["distances"]`; run
+      :func:`snapatac2.pp.knn` first.
+    - Do NOT interpret the highest silhouette score as a guaranteed biological
+      optimum; inspect marker accessibility and cluster sizes as well.
 
     Parameters
     ----------
-    adata
-        The annotated data matrix or sparse adjacency matrix of the graph,
-        defaults to neighbors connectivities.
-    resolutions
-        A list of resolution values to evaluate.
-    use_rep
-        Which data in `adata.obsm` to use for clustering. Default is "X_spectral".
-    objective_function
-        whether to use the Constant Potts Model (CPM) or modularity.
-        Must be either "CPM", "modularity" or "RBConfiguration".
-    min_cluster_size
-        The minimum size of clusters.
-    n_iterations
-        How many iterations of the Leiden clustering algorithm to perform.
-        Positive values above 2 define the total number of iterations to perform,
-        -1 has the algorithm run until it reaches its optimal clustering.
-    random_state
-        Change the initialization of the optimization.
-    weighted
-        Whether to use the edge weights in the graph
-    n_jobs
-        The number of parallel jobs to run.
+    adata : AnnData | AnnDataSet | scipy.sparse.spmatrix
+        Annotated data object containing `adata.obsp["distances"]`, or a sparse
+        graph adjacency matrix.
+    resolutions : list[float]
+        Resolution values to evaluate.
+    use_rep : str | np.ndarray
+        Embedding used for silhouette scoring. If `adata` is a graph matrix,
+        pass the embedding array directly.
+    objective_function : {"CPM", "modularity", "RBConfiguration"}
+        Objective function passed to :func:`leiden`.
+    min_cluster_size : int
+        Minimum retained cluster size.
+    n_iterations : int
+        Number of Leiden optimization iterations. Use `-1` to run until
+        convergence.
+    random_state : int
+        Seed for Leiden initialization.
+    weighted : bool
+        If True, use graph edge weights.
+    n_jobs : int
+        Number of worker processes.
 
     Returns
     -------
     list[dict]
-        A dictionary mapping each resolution to its corresponding silhouette score.
+        One dictionary per resolution with keys `"resolution"`, `"n_clusters"`,
+        and `"silhouette_score"`.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> snap.pp.knn(adata, use_rep="X_spectral")
+    >>> scores = snap.tl.leiden_sweep(adata, [0.5, 1.0], n_jobs=1)
+    >>> sorted(scores[0])
+    ['n_clusters', 'resolution', 'silhouette_score']
     """
     from sklearn.metrics import silhouette_score
     from multiprocess import get_context
@@ -204,35 +231,50 @@ def kmeans(
     inplace: bool = True,
 ) -> np.ndarray | None:
     """
-    Cluster cells into subgroups using the K-means algorithm, a classical algorithm in data mining.
+    Cluster cells with k-means.
 
+    Use this function on a dense embedding such as `adata.obsm["X_spectral"]`,
+    or pass a NumPy array directly and set `inplace=False`.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass a raw count matrix unless k-means on counts is intended; use a
+      normalized embedding for typical single-cell workflows.
+    - Do NOT rely on `n_iterations` or `random_state` to alter the current Rust
+      backend call; they are retained in the API but not forwarded here.
 
     Parameters
     ----------
-    adata
-        The annotated data matrix.
-    n_clusters
-        Number of clusters to return.
-    n_iterations
-        How many iterations of the kmeans clustering algorithm to perform.
-        Positive values above 2 define the total number of iterations to perform,
-        -1 has the algorithm run until it reaches its optimal clustering.
-    random_state
-        Change the initialization of the optimization.
-    use_rep
-        Which data in `adata.obsm` to use for clustering. Default is "X_spectral".
-    key_added
-        `adata.obs` key under which to add the cluster labels.
+    adata : AnnData | AnnDataSet | np.ndarray
+        Annotated data object containing `adata.obsm[use_rep]`, or a numeric
+        matrix with cells as rows.
+    n_clusters : int
+        Number of clusters to compute.
+    n_iterations : int
+        API parameter reserved for k-means iteration control.
+    random_state : int
+        API parameter reserved for initialization control.
+    use_rep : str
+        Key in `adata.obsm` containing the input embedding.
+    key_added : str
+        Key in `adata.obs` used to store cluster labels.
+    inplace : bool
+        If True, store labels in `adata.obs[key_added]`; if False, return them.
 
     Returns
     -------
-    adds fields to `adata`:
-    `adata.obs[key_added]`
-        Array of dim (number of samples) that stores the subgroup id
-        (`'0'`, `'1'`, ...) for each cell.
-    `adata.uns['kmeans']['params']`
-        A dict with the values for the parameters `n_clusters`, `random_state`,
-        and `n_iterations`.
+    np.ndarray | None
+        If `inplace=True`, stores categorical labels in `adata.obs[key_added]`
+        and returns None. If `inplace=False`, returns a string array of labels.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import snapatac2 as snap
+    >>> X = np.random.default_rng(0).normal(size=(12, 3))
+    >>> labels = snap.tl.kmeans(X, n_clusters=3, inplace=False)
+    >>> labels.shape
+    (12,)
     """
     import polars
 
@@ -272,42 +314,56 @@ def hdbscan(
     **kwargs,
 ) -> None:
     """
-    Cluster cells into subgroups using the HDBSCAN algorithm.
+    Cluster cells with HDBSCAN.
+
+    Use this function to detect variable-density clusters and label noise cells
+    from an embedding stored in `adata.obsm[use_rep]`.
+
+    Anti-Patterns
+    -------------
+    - Do NOT expect every cell to receive a cluster label; HDBSCAN labels noise
+      cells as `-1`.
+    - Do NOT pass raw fragment counts as `use_rep`; use a low-dimensional
+      embedding for typical workflows.
 
     Parameters
     ----------
-    adata
-        The annotated data matrix.
-    min_cluster_size
-        The minimum size of clusters; single linkage splits that contain
+    adata : AnnData
+        Annotated data object containing `adata.obsm[use_rep]`.
+    min_cluster_size : int
+        Minimum cluster size; single linkage splits that contain
         fewer points than this will be considered points "falling out" of
         a cluster rather than a cluster splitting into two new clusters.
-    min_samples
-        The number of samples in a neighbourhood for a point to be considered a core point.
-    cluster_selection_epsilon
+    min_samples : int | None
+        Number of samples in a neighborhood for a point to be considered a core
+        point. If None, HDBSCAN chooses its default from `min_cluster_size`.
+    cluster_selection_epsilon : float
         A distance threshold. Clusters below this value will be merged.
-    alpha
+    alpha : float
         A distance scaling parameter as used in robust single linkage.
-    cluster_selection_method
-        The method used to select clusters from the condensed tree.
-        The standard approach for HDBSCAN* is to use an Excess of Mass
-        algorithm to find the most persistent clusters.
-        Alternatively you can instead select the clusters at the leaves of
-        the tree - this provides the most fine grained and homogeneous clusters.
-        Options are: "eom" or "leaf".
-    random_state
-        Change the initialization of the optimization.
-    use_rep
-        Which data in `adata.obsm` to use for clustering. Default is "X_spectral".
-    key_added
-        `adata.obs` key under which to add the cluster labels.
+    cluster_selection_method : str
+        Cluster extraction method, usually `"eom"` or `"leaf"`.
+    random_state : int
+        API parameter reserved for consistency with other clustering functions.
+    use_rep : str
+        Key in `adata.obsm` containing the input embedding.
+    key_added : str
+        Key in `adata.obs` used to store cluster labels.
+    **kwargs
+        Additional keyword arguments passed to `hdbscan.HDBSCAN`.
 
     Returns
     -------
-    adds fields to `adata`:
-    `adata.obs[key_added]`
-        Array of dim (number of samples) that stores the subgroup id
-        (`'0'`, `'1'`, ...) for each cell.
+    None
+        Stores categorical labels in `adata.obs[key_added]`.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> snap.tl.hdbscan(adata, min_cluster_size=20)
+    >>> "hdbscan" in adata.obs
+    True
     """
     import pandas as pd
     import hdbscan
@@ -339,38 +395,54 @@ def dbscan(
     key_added: str = "dbscan",
 ) -> None:
     """
-    Cluster cells into subgroups using the DBSCAN algorithm.
+    Cluster cells with DBSCAN.
+
+    Use this function to identify density-connected groups and noise cells from
+    an embedding stored in `adata.obsm[use_rep]`.
+
+    Anti-Patterns
+    -------------
+    - Do NOT expect DBSCAN to assign every cell to a cluster; noise cells are
+      labeled as `-1`.
+    - Do NOT reuse `eps` across embeddings with different scales; tune it for
+      the representation passed through `use_rep`.
 
     Parameters
     ----------
-    adata
-        The annotated data matrix.
-    eps
+    adata : AnnData
+        Annotated data object containing `adata.obsm[use_rep]`.
+    eps : float
         The maximum distance between two samples for one to be considered as
         in the neighborhood of the other. This is not a maximum bound on the
         distances of points within a cluster. This is the most important
         DBSCAN parameter to choose appropriately for your data set and distance function.
-    min_samples
+    min_samples : int
         The number of samples (or total weight) in a neighborhood for a point
         to be considered as a core point. This includes the point itself.
-    leaf_size
+    leaf_size : int
         Leaf size passed to BallTree or cKDTree. This can affect the speed of
         the construction and query, as well as the memory required to store the
         tree. The optimal value depends on the nature of the problem.
-    n_jobs
+    n_jobs : int | None
         The number of parallel jobs to run. None means 1 unless in a
         joblib.parallel_backend context. -1 means using all processors.
-    use_rep
-        Which data in `adata.obsm` to use for clustering. Default is "X_spectral".
-    key_added
-        `adata.obs` key under which to add the cluster labels.
+    use_rep : str
+        Key in `adata.obsm` containing the input embedding.
+    key_added : str
+        Key in `adata.obs` used to store cluster labels.
 
     Returns
     -------
-    adds fields to `adata`:
-    `adata.obs[key_added]`
-        Array of dim (number of samples) that stores the subgroup id
-        (`'0'`, `'1'`, ...) for each cell.
+    None
+        Stores categorical labels in `adata.obs[key_added]`.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> snap.tl.dbscan(adata, eps=0.5, min_samples=5)
+    >>> "dbscan" in adata.obs
+    True
     """
     from sklearn.cluster import DBSCAN
     import pandas as pd

@@ -19,46 +19,74 @@ def export_fragments(
     compression: Literal["gzip", "zstandard"] | None = None,
     compression_level: int | None = None,
 ) -> dict[str, str]:
-    """Export and save fragments in a BED format file.
+    """Export grouped fragments to BED-like files.
+
+    Use this function after importing fragments to write one fragment file per
+    cell group. Provide group labels directly or pass the name of an `.obs`
+    column. The output filenames are constructed as
+    `{prefix}{group_name}{suffix}` inside `out_dir`.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass an AnnData object without fragment metadata created by
+      :func:`~snapatac2.pp.import_fragments`.
+    - Do NOT pass `groupby` or `ids` lists with lengths different from
+      `adata.n_obs`.
 
     Parameters
     ----------
-    adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-    groupby
-        Group the cells. If a list of `str`, each element is the group name of the corresponding cell.
-        The length of the list must be equal to `n_obs`. If a `str`, groups are obtained from
-        `.obs[groupby]`. 
-    selections
-        Export only the selected groups.
-    ids
-        Cell ids add to the bed records. If `None`, `.obs_names` is used.
-    min_frag_length
-        Minimum fragment length to be included in the computation.
-    max_frag_length
-        Maximum fragment length to be included in the computation.
-    out_dir
-        Directory for saving the outputs.
-    prefix
-        Text added to the output file name.
-    suffix
-        Text added to the output file name.
-    compression
-        Compression type. If `None`, it is inferred from the suffix.
-    compression_level
-        Compression level. 1-9 for gzip, 1-22 for zstandard.
-        If `None`, it is set to 6 for gzip and 3 for zstandard.
+    adata : snapatac2._snapatac2.AnnData or snapatac2._snapatac2.AnnDataSet
+        Annotated data object with `n_obs` cells and fragment metadata.
+    groupby : str or list[str]
+        Group assignment for each cell. If a string, values are read from
+        `adata.obs[groupby]`. If a list, it must contain one group label per
+        cell in observation order.
+    selections : list[str] or None, default: None
+        Group names to export. If None, export every group found in `groupby`.
+    ids : str, list[str], or None, default: None
+        Cell IDs to write into BED records. If a string, values are read from
+        `adata.obs[ids]`. If a list, it must contain one ID per cell. If None,
+        `adata.obs_names` are used.
+    min_frag_length : int or None, default: None
+        Minimum fragment length to export. If None, do not apply a minimum.
+    max_frag_length : int or None, default: None
+        Maximum fragment length to export. If None, do not apply a maximum.
+    out_dir : pathlib.Path, default: "./"
+        Directory where output files are written.
+    prefix : str, default: ""
+        Text prepended to each output filename.
+    suffix : str, default: ".bed.zst"
+        Text appended to each output filename. Used to infer compression when
+        `compression=None`.
+    compression : {"gzip", "zstandard"} or None, default: None
+        Compression codec. If None, infer it from `suffix`.
+    compression_level : int or None, default: None
+        Compression level. Use 1-9 for gzip or 1-22 for zstandard. If None, use
+        the backend default: 6 for gzip or 3 for zstandard.
 
     Returns
     -------
     dict[str, str]
-        A dictionary contains `(groupname, filename)` pairs. The file names are
-        formatted as `{prefix}{groupname}{suffix}`.
+        Mapping from group name to output filename.
 
     See Also
     --------
     export_coverage
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> data = snap.pp.import_fragments(
+    ...     snap.datasets.pbmc500(downsample=True),
+    ...     chrom_sizes=snap.genome.hg38,
+    ...     sorted_by_barcode=False,
+    ... )
+    >>> snap.ex.export_fragments(
+    ...     data,
+    ...     groupby=["pbmc500"] * data.n_obs,
+    ...     out_dir="fragments_by_group",
+    ... )
+    {'pbmc500': 'fragments_by_group/pbmc500.bed.zst'}
     """
     if isinstance(groupby, str):
         groupby = adata.obs[groupby]
@@ -100,84 +128,85 @@ def export_coverage(
     tempdir: Path | None = None,
     n_jobs: int = 8,
 ) -> dict[str, str]:
-    """Export and save coverage in a bedgraph or bigwig format file.
+    """Export grouped genome-wide coverage tracks.
 
-    This function first divides cells into groups based on the `groupby` parameter.
-    It then independently generates the genome-wide coverage track (bigWig or bedGraph) for each group
-    of cells. The coverage is calculated as the number of reads
-    per bin, where bins are short consecutive counting windows of a defined size.
-    For paired-end data, the reads are extended to the fragment length and the
-    coverage is calculated as the number of fragments per bin.
-    There are several options for normalization. The default is RPKM, which
-    normalizes by the total number of reads and the length of the region.
-    The normalization can be disabled by setting `normalization=None`.
+    Use this function after importing fragments to write one bedGraph or bigWig
+    coverage track per cell group. Coverage is counted in fixed-width genomic
+    bins, optionally filtered by fragment length, smoothed, and normalized.
+    Disable normalization with `normalization=None`.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass an AnnData object without fragment metadata created by
+      :func:`~snapatac2.pp.import_fragments`.
+    - Do NOT use `include_for_norm` and `exclude_for_norm` as peak-calling
+      filters; they only define which fragments contribute to normalization.
+    - Do NOT rely on suffix inference for custom extensions; pass
+      `output_format` and `compression` explicitly.
 
     .. image:: /_static/images/func+export_coverage.svg
         :align: center
 
     Parameters
     ----------
-    adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-    groupby
-        Group the cells. If a list of `str`, each element is the group name of the corresponding cell.
-        The length of the list must be equal to `n_obs`. If a `str`, groups are obtained from
-        `.obs[groupby]`. 
-    selections
-        Export only the selected groups.
-    bin_size
-        Size of the bins, in bases, for the output of the bigwig/bedgraph file.
-    blacklist
-        A BED file containing the blacklisted regions.
-    normalization
-        Normalization method. If `None`, no normalization is performed. Options:
-        - RPKM (per bin) = #reads per bin / (#mapped_reads (in millions) * bin length (kb)).
-        - CPM (per bin) = #reads per bin / #mapped_reads (in millions).
-        - BPM (per bin) = #reads per bin / sum of all reads per bin (in millions).
-    include_for_norm
-        A list of string (e.g., ["chr1:1-100", "chr2:2-200"]) or a BED file containing
-        the genomic loci to include for normalization.
-        If specified, only the reads that overlap with these loci will be used for normalization.
-        A typical use case is to include only the promoter regions for the normalization.
-    exclude_for_norm
-        A list of string (e.g., ["chr1:1-100", "chr2:2-200"]) or a BED file containing
-        the genomic loci to exclude for normalization.
-        If specified, the reads that overlap with these loci will be excluded from normalization.
-        If a read overlaps with both `include_for_norm` and `exclude_for_norm`, it will be excluded.
-    min_frag_length
-        Minimum fragment length to be included in the computation.
-    max_frag_length
-        Maximum fragment length to be included in the computation.
-    counting_strategy
-        The strategy to compute feature counts. It must be one of the following:
-        "fragment" or "insertion". "fragment" means the
-        feature counts are assigned based on the number of fragments that overlap
-        with a region of interest. "insertion" means the feature counts are assigned
-        based on the number of insertions that overlap with a region of interest.
-    smooth_base
-        Length of the smoothing window in bases for the output of the bigwig/bedgraph file.
-    out_dir
-        Directory for saving the outputs.
-    prefix
-        Text added to the output file name.
-    suffix
-        Text added to the output file name.
-    output_format
-        Output format. If `None`, it is inferred from the suffix.
-    compression
-        Compression type. If `None`, it is inferred from the suffix.
-    compression_level
-        Compression level. 1-9 for gzip, 1-22 for zstandard.
-        If `None`, it is set to 6 for gzip and 3 for zstandard.
-    n_jobs
-        Number of threads to use. If `<= 0`, use all available threads.
+    adata : snapatac2._snapatac2.AnnData or snapatac2._snapatac2.AnnDataSet
+        Annotated data object with `n_obs` cells and fragment metadata.
+    groupby : str or list[str]
+        Group assignment for each cell. If a string, values are read from
+        `adata.obs[groupby]`. If a list, it must contain one group label per
+        cell in observation order.
+    selections : list[str] or None, default: None
+        Group names to export. If None, export every group found in `groupby`.
+    bin_size : int, default: 10
+        Width, in bases, of each coverage bin.
+    blacklist : pathlib.Path or None, default: None
+        BED file of regions to exclude from coverage output.
+    normalization : {"RPKM", "CPM", "BPM"} or None, default: "RPKM"
+        Coverage normalization method. Use None to export raw counts. RPKM
+        divides each bin by mapped reads in millions and bin length in kilobases;
+        CPM divides by mapped reads in millions; BPM divides by the sum of all
+        binned reads in millions.
+    include_for_norm : list[str] or pathlib.Path, default: None
+        Genomic intervals or BED file of intervals to include when computing the
+        normalization denominator. If None, include all non-excluded fragments.
+    exclude_for_norm : list[str] or pathlib.Path, default: None
+        Genomic intervals or BED file of intervals to exclude when computing the
+        normalization denominator. If a fragment overlaps both included and
+        excluded intervals, it is excluded.
+    min_frag_length : int or None, default: None
+        Minimum fragment length to count. If None, do not apply a minimum.
+    max_frag_length : int or None, default: 2000
+        Maximum fragment length to count. If None, do not apply a maximum.
+    counting_strategy : {"fragment", "insertion"}, default: "fragment"
+        Counting mode. Use "fragment" to count overlapping fragments or
+        "insertion" to count transposition insertion sites.
+    smooth_base : int or None, default: None
+        Width, in bases, of the smoothing window. If None, do not smooth.
+    out_dir : pathlib.Path, default: "./"
+        Directory where output files are written.
+    prefix : str, default: ""
+        Text prepended to each output filename.
+    suffix : str, default: ".bw"
+        Text appended to each output filename. Used to infer output format and
+        compression when the corresponding arguments are None.
+    output_format : {"bedgraph", "bigwig"} or None, default: None
+        Coverage-track format. If None, infer it from `suffix`.
+    compression : {"gzip", "zstandard"} or None, default: None
+        Compression codec for compressed bedGraph output. If None, infer it from
+        `suffix`.
+    compression_level : int or None, default: None
+        Compression level. Use 1-9 for gzip or 1-22 for zstandard. If None, use
+        the backend default: 6 for gzip or 3 for zstandard.
+    tempdir : pathlib.Path or None, default: None
+        Directory for temporary files created during export. If None, use the
+        system temporary directory.
+    n_jobs : int, default: 8
+        Number of worker threads. If `n_jobs <= 0`, use all available threads.
 
     Returns
     -------
     dict[str, str]
-        A dictionary contains `(groupname, filename)` pairs. The file names are
-        formatted as `{prefix}{groupname}{suffix}`.
+        Mapping from group name to output filename.
 
     See Also
     --------
@@ -187,32 +216,13 @@ def export_coverage(
     --------
     >>> import snapatac2 as snap
     >>> data = snap.read(snap.datasets.pbmc5k(type="annotated_h5ad"), backed='r')
-    >>> snap.ex.export_coverage(data, groupby='cell_type', suffix='.bedgraph.zst')
-    {'cDC': './cDC.bedgraph.zst',
-     'Memory B': './Memory B.bedgraph.zst',
-     'CD4 Naive': './CD4 Naive.bedgraph.zst',
-     'pDC': './pDC.bedgraph.zst',
-     'CD8 Naive': './CD8 Naive.bedgraph.zst',
-     'CD8 Memory': './CD8 Memory.bedgraph.zst',
-     'CD14 Mono': './CD14 Mono.bedgraph.zst',
-     'Naive B': './Naive B.bedgraph.zst',
-     'NK': './NK.bedgraph.zst',
-     'CD4 Memory': './CD4 Memory.bedgraph.zst',
-     'CD16 Mono': './CD16 Mono.bedgraph.zst',
-     'MAIT': './MAIT.bedgraph.zst'}
-    >>> snap.ex.export_coverage(data, groupby='cell_type', suffix='.bw')
-    {'Naive B': './Naive B.bw',
-     'CD4 Memory': './CD4 Memory.bw',
-     'CD16 Mono': './CD16 Mono.bw',
-     'CD8 Naive': './CD8 Naive.bw',
-     'pDC': './pDC.bw',
-     'CD8 Memory': './CD8 Memory.bw',
-     'NK': './NK.bw',
-     'Memory B': './Memory B.bw',
-     'CD14 Mono': './CD14 Mono.bw',
-     'MAIT': './MAIT.bw',
-     'CD4 Naive': './CD4 Naive.bw',
-     'cDC': './cDC.bw'}
+    >>> snap.ex.export_coverage(
+    ...     data,
+    ...     groupby='cell_type',
+    ...     selections=['Naive B'],
+    ...     suffix='.bedgraph.zst',
+    ... )
+    {'Naive B': './Naive B.bedgraph.zst'}
     """
     if isinstance(groupby, str):
         groupby = adata.obs[groupby]

@@ -14,36 +14,56 @@ def scatter(
     marker_opacity: float = 0.5,
     **kwargs,
 ) -> 'plotly.graph_objects.Figure' | None:
-    """Plot a scatter plot.
+    """Plot a two-dimensional scatter plot.
+
+    Use this helper to build a Plotly scatter plot from aligned coordinate
+    vectors and optional categorical or continuous color values.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass coordinate vectors with different lengths. ``X``, ``Y``, and
+      ``color`` must describe the same points.
+    - Do NOT call Plotly rendering methods directly when using SnapATAC2 plotting
+      functions. Pass rendering options through ``**kwargs`` instead.
 
     Parameters
     ----------
-    X
-        The x coordinates of the points.
-    Y
-        The y coordinates of the points.
-    color
-        The color of the points.
-    x_label
-        The label of the x axis.
-    y_label
-        The label of the y axis.
-    color_label
-        The label of the color bar.
-    marker_size
-        Size of the dots.
-    marker_opacity
-        Opacity of the dots.
-    kwargs        
-        Additional arguments passed to :func:`~snapatac2.pl.render_plot` to
-        control the final plot output. Please see :func:`~snapatac2.pl.render_plot`
-        for details.
+    X : list of float or numpy.ndarray
+        X coordinates of the points.
+    Y : list of float or numpy.ndarray
+        Y coordinates of the points.
+    color : list, numpy.ndarray, or None
+        Values used to color points. If ``None``, draw all points with one color.
+    x_label : str
+        X-axis label.
+    y_label : str
+        Y-axis label.
+    color_label : str
+        Label for the legend or color scale when ``color`` is provided.
+    marker_size : float
+        Marker size in pixels.
+    marker_opacity : float
+        Marker opacity between 0 and 1.
+    **kwargs
+        Additional rendering options passed to :func:`snapatac2.pl.render_plot`,
+        such as ``show``, ``interactive``, ``out_file``, and ``scale``.
 
     Returns
     -------
-    'plotly.graph_objects.Figure' | None
-        If `show=False` and `out_file=None`, an `plotly.graph_objects.Figure` will be 
-        returned, which can then be further customized using the plotly API.
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> fig = snap.pl.scatter(
+    ...     [0.0, 1.0, 2.0],
+    ...     [0.2, 0.8, 1.4],
+    ...     color=["A", "B", "A"],
+    ...     show=False,
+    ... )
+    >>> fig.update_layout(title="Scatter plot")
     """
     import plotly.express as px
     import pandas as pd
@@ -84,40 +104,61 @@ def scatter3d(
     marker_opacity: float = 0.5,
     **kwargs,
 ) -> 'plotly.graph_objects.Figure' | None:
-    """Plot a scatter plot.
+    """Plot a three-dimensional scatter plot.
+
+    Use this helper to build a Plotly 3D scatter plot from aligned coordinate
+    vectors and optional categorical or continuous color values.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass coordinate vectors with different lengths. ``X``, ``Y``,
+      ``Z``, and ``color`` must describe the same points.
+    - Do NOT pass two-dimensional embeddings here. Use :func:`snapatac2.pl.scatter`
+      for 2D coordinates.
 
     Parameters
     ----------
-    X
-        The x coordinates of the points.
-    Y
-        The y coordinates of the points.
-    Z
-        The z coordinates of the points.
-    color
-        The color of the points.
-    x_label
-        The label of the x axis.
-    y_label
-        The label of the y axis.
-    z_label
-        The label of the z axis.
-    color_label
-        The label of the color bar.
-    marker_size
-        Size of the dots.
-    marker_opacity
-        Opacity of the dots.
-    kwargs        
-        Additional arguments passed to :func:`~snapatac2.pl.render_plot` to
-        control the final plot output. Please see :func:`~snapatac2.pl.render_plot`
-        for details.
+    X : list of float or numpy.ndarray
+        X coordinates of the points.
+    Y : list of float or numpy.ndarray
+        Y coordinates of the points.
+    Z : list of float or numpy.ndarray
+        Z coordinates of the points.
+    color : list, numpy.ndarray, or None
+        Values used to color points. If ``None``, draw all points with one color.
+    x_label : str
+        X-axis label.
+    y_label : str
+        Y-axis label.
+    z_label : str
+        Z-axis label.
+    color_label : str
+        Label for the legend or color scale when ``color`` is provided.
+    marker_size : float
+        Marker size in pixels.
+    marker_opacity : float
+        Marker opacity between 0 and 1.
+    **kwargs
+        Additional rendering options passed to :func:`snapatac2.pl.render_plot`,
+        such as ``show``, ``interactive``, ``out_file``, and ``scale``.
 
     Returns
     -------
-    'plotly.graph_objects.Figure' | None
-        If `show=False` and `out_file=None`, an `plotly.graph_objects.Figure` will be 
-        returned, which can then be further customized using the plotly API.
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> fig = snap.pl.scatter3d(
+    ...     [0.0, 1.0, 2.0],
+    ...     [0.2, 0.8, 1.4],
+    ...     [1.0, 0.5, 0.0],
+    ...     color=["A", "B", "A"],
+    ...     show=False,
+    ... )
+    >>> fig.update_layout(title="3D scatter plot")
     """
     import plotly.express as px
     import pandas as pd
@@ -154,6 +195,60 @@ def heatmap(
     linkage: str = "ward",
     **kwargs,
 ):
+    """Plot a heatmap with optional row and column dendrograms.
+
+    Use this helper to visualize a numeric matrix and, by default, cluster both
+    dimensions before rendering.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass non-numeric arrays. The clustering and heatmap layers require
+      numeric values.
+    - Do NOT enable clustering when a dimension has too few observations for the
+      selected linkage method; disable ``cluster_rows`` or ``cluster_columns`` in
+      that case.
+
+    Parameters
+    ----------
+    data_array : numpy.ndarray
+        Two-dimensional numeric matrix to display.
+    row_names : list of str or None
+        Labels for matrix rows. If provided, length must match the number of
+        rows in ``data_array``.
+    column_names : list of str or None
+        Labels for matrix columns. If provided, length must match the number of
+        columns in ``data_array``.
+    cluster_columns : bool
+        Whether to hierarchically cluster columns before plotting.
+    cluster_rows : bool
+        Whether to hierarchically cluster rows before plotting.
+    colorscale : str
+        Plotly colorscale used for heatmap values.
+    linkage : str
+        Linkage method passed to :func:`scipy.cluster.hierarchy.linkage`.
+    **kwargs
+        Additional rendering options passed to :func:`snapatac2.pl.render_plot`,
+        such as ``show``, ``interactive``, ``out_file``, and ``scale``.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import snapatac2 as snap
+    >>> matrix = np.array([[1.0, 2.0, 3.0], [2.0, 1.0, 4.0], [3.0, 4.0, 1.0]])
+    >>> fig = snap.pl.heatmap(
+    ...     matrix,
+    ...     row_names=["r1", "r2", "r3"],
+    ...     column_names=["c1", "c2", "c3"],
+    ...     show=False,
+    ... )
+    >>> fig.update_layout(title="Clustered heatmap")
+    """
     import plotly.graph_objects as go
     import plotly.figure_factory as ff
     import scipy.cluster.hierarchy as sch
@@ -234,35 +329,53 @@ def render_plot(
     out_file: str | None = None,
     scale: float | None = None,
 ) -> 'plotly.graph_objects.Figure' | None:
-    """ Render a plotly figure.
+    """Render, display, or save a Plotly figure.
 
-    Note that this function is not intended to be called directly. Instead, it is
-    called by other plotting functions in this package.
+    Use this function to apply SnapATAC2 plotting output rules to an existing
+    Plotly figure. Most users should call higher-level plotting functions, which
+    call this helper internally.
+
+    Anti-Patterns
+    -------------
+    - Do NOT expect a figure object when ``show=True`` or ``out_file`` is set;
+      the function returns a figure only for ``show=False`` and ``out_file=None``.
+    - Do NOT save static image formats without the Plotly image export backend
+      installed. Use ``.html`` for a dependency-light interactive file.
 
     Parameters
     ----------
-    fig
-        The plotly figure to render.
-    width
-        The width of the plot.
-    height
-        The height of the plot.
-    interactive
-        Whether to make interactive plot.
-    show
-        Show the figure.
-    out_file
-        Path of the output file for saving the output image, end with
-        '.svg' or '.pdf' or '.png' or '.html'.
-    scale
-        Scale factor for the image. Only used when `out_file` is not None.
-        Use scale > 1 to increase resolution and scale < 1 to decrease.
+    fig : plotly.graph_objects.Figure
+        Plotly figure to render.
+    width : int
+        Width of the rendered plot in pixels.
+    height : int
+        Height of the rendered plot in pixels.
+    interactive : bool
+        Whether to display an interactive Plotly figure when ``show=True``. If
+        ``False``, return an IPython PNG image object for display.
+    show : bool
+        Whether to display the figure immediately.
+    out_file : str or None
+        Output path for saving the plot. Supported suffixes include ``.svg``,
+        ``.pdf``, ``.png``, and ``.html``.
+    scale : float or None
+        Scale factor for static image export. Use values greater than 1 to
+        increase resolution.
 
     Returns
     -------
-    'plotly.graph_objects.Figure' | None
-        If `show=False` and `out_file=None`, an `plotly.graph_objects.Figure` will be
-        returned, which can then be further customized using the plotly API.
+    plotly.graph_objects.Figure, IPython.display.Image, or None
+        Returns the Plotly figure when ``show=False`` and ``out_file=None``;
+        returns an IPython image when ``show=True`` and ``interactive=False``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> import plotly.graph_objects as go
+    >>> import snapatac2 as snap
+    >>> fig = go.Figure(go.Scatter(x=[0, 1, 2], y=[1, 3, 2]))
+    >>> fig = snap.pl.render_plot(fig, width=500, height=300, show=False)
+    >>> fig.update_layout(title="Rendered plot")
     """
 
     fig.update_layout({
@@ -294,17 +407,44 @@ def kde2d(
     log_x: bool = False,
     log_y: bool = False,
 ) -> 'plotly.graph_objects.Figure' | None:
-    """
+    """Estimate and plot a two-dimensional kernel density surface.
+
+    Use this helper to convert paired observations into a Plotly contour plot,
+    optionally estimating density in log10-transformed coordinate space.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass zeros or negative values when ``log_x=True`` or ``log_y=True``.
+      Log-transformed axes require strictly positive coordinates.
+    - Do NOT use this helper for pre-binned matrices. Pass raw paired
+      observations instead.
+
     Parameters
     ----------
-    x
-        X coordinates of the data points.
-    y
-        Y coordinates of the data points.
-    log_x
-        Whether to use log10(x) as the x-axis.
-    log_y
-        Whether to use log10(y) as the y-axis.
+    x : numpy.ndarray
+        X coordinates of the observations.
+    y : numpy.ndarray
+        Y coordinates of the observations. Must have the same length as ``x``.
+    log_x : bool
+        Whether to estimate density on ``log10(x)`` and display a log-scaled
+        x-axis.
+    log_y : bool
+        Whether to estimate density on ``log10(y)`` and display a log-scaled
+        y-axis.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+        Plotly contour figure containing the estimated density levels.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import snapatac2 as snap
+    >>> x = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    >>> y = np.array([2.0, 2.5, 3.5, 3.8, 5.0])
+    >>> fig = snap.pl.kde2d(x, y)
+    >>> fig.update_layout(title="2D density")
     """
     import plotly.graph_objects as go
     import plotly.express as px

@@ -14,16 +14,38 @@ def marker_regions(
     pvalue: float = 0.01,
 ) -> dict[str, list[str]]:
     """
-    A quick-and-dirty way to get marker regions.
+    Select marker regions for each group by z-score enrichment.
+
+    Use this lightweight screen to obtain candidate group-specific regions from
+    aggregated accessibility before running more formal differential tests.
+
+    Anti-Patterns
+    -------------
+    - Do NOT treat these markers as regression-adjusted differential results;
+      use :func:`diff_test` for hypothesis testing between two cell groups.
+    - Do NOT pass a grouping key that is absent from `data.obs`.
 
     Parameters
     ----------
-    data
-        AnnData or AnnDataSet object.
-    groupby
-        Grouping variable.
-    pvalue
-        P-value threshold.
+    data : AnnData | AnnDataSet
+        Annotated data object with regions in `.var_names` and counts in `.X`.
+    groupby : str | list[str]
+        Grouping key in `data.obs`, or one group label per cell.
+    pvalue : float
+        One-sided normal survival-function threshold applied to z-scores.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Mapping from group name to marker region names.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> markers = snap.tl.marker_regions(adata, groupby="cell_type", pvalue=0.01)
+    >>> isinstance(markers, dict)
+    True
     """
     count = aggregate_X(data, groupby, normalize="RPKM")
     z = zscore(np.log2(1 + count.X), axis = 0)
@@ -66,40 +88,60 @@ def diff_test(
     solver: str = "lbfgs",
 ) -> 'polars.DataFrame':
     """
-    Identify differentially accessible regions.
+    Test regions for differential accessibility between two cell groups.
+
+    Use this function to compare two explicit cell sets with logistic-regression
+    likelihood-ratio tests after filtering by detection fraction and fold change.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass group names directly; pass cell indices, cell barcodes, or a
+      Boolean mask for each group.
+    - Do NOT use `covariates`; the parameter is currently not implemented.
+    - Do NOT expect features failing `min_pct` or `min_log_fc` to appear in the
+      output table.
 
     Parameters
     ----------
-    data
-        AnnData or AnnDataSet object.
-    cell_group1
-        cells belonging to group 1. This can be a list of cell barcodes, indices or 
-        boolean mask vector.
-    cell_group2
-        cells belonging to group 2. This can be a list of cell barcodes, indices or 
-        boolean mask vector.
-    features
-        Features/peaks to test. If None, all features are tested.
-    covariates
-    direction
-        "positive", "negative", or "both".
-        "positive": return features that are enriched in group 1.
-        "negative": return features that are enriched in group 2.
-        "both": return features that are enriched in group 1 or group 2.
-    min_log_fc
-        Limit testing to features which show, on average, at least
-        X-fold difference (log2-scale) between the two groups of cells.
-    min_pct
-        Only test features that are detected in a minimum fraction of min_pct
-        cells in either of the two populations.
-    solver
-        Solver to use in :class:`sklearn.linear_model.LogisticRegression`.
+    data : AnnData | AnnDataSet
+        Annotated data object with cells in observations and regions in
+        variables.
+    cell_group1 : list[int] | list[str]
+        Cells in group 1 as indices, barcodes, or a Boolean mask.
+    cell_group2 : list[int] | list[str]
+        Cells in group 2 as indices, barcodes, or a Boolean mask.
+    features : list[str] | list[int] | None
+        Region names or indices to test. If None, test all regions that pass
+        filtering.
+    covariates : list[str] | None
+        Reserved for covariates; currently raises `NameError` when provided.
+    direction : {"positive", "negative", "both"}
+        Direction of enrichment to retain. `"positive"` keeps regions enriched
+        in group 1, `"negative"` keeps regions enriched in group 2, and
+        `"both"` keeps either direction.
+    min_log_fc : float
+        Minimum absolute or directional log2 fold change required before testing.
+    min_pct : float
+        Minimum fraction of cells with nonzero accessibility in either group.
+    solver : str
+        Solver passed to `sklearn.linear_model.LogisticRegression`.
 
     Returns
     -------
     pl.DataFrame
-        A DataFrame with 4 columns: "feature name", "log2(fold_change)",
-        "p-value", and "adjusted p-value".
+        Differential accessibility table sorted by adjusted p-value, with
+        columns `"feature name"`, `"log2(fold_change)"`, `"p-value"`, and
+        `"adjusted p-value"`.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> group1 = list(range(50))
+    >>> group2 = list(range(50, 100))
+    >>> result = snap.tl.diff_test(adata, group1, group2, features=list(range(20)))
+    >>> set(result.columns) <= {"feature name", "log2(fold_change)", "p-value", "adjusted p-value"}
+    True
     """
     import polars as pl
 

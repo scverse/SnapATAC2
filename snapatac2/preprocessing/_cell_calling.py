@@ -152,6 +152,11 @@ def estimate_recovered_cells_ordmag(
     return recovered_cells[idx], loss[idx]
 
 def find_within_ordmag(x, baseline_idx):
+    """Count barcodes within one order of magnitude of a baseline barcode.
+
+    Use this helper inside OrdMag cell calling to convert a baseline barcode
+    count into the number of barcodes that pass the derived count cutoff.
+    """
     x_ascending = np.sort(x)
     # Add +1 as we're getting from the other side
     baseline = x_ascending[-(baseline_idx + 1)]
@@ -160,6 +165,12 @@ def find_within_ordmag(x, baseline_idx):
     return len(x) - np.searchsorted(x_ascending, cutoff)
 
 def summarize_bootstrapped_top_n(top_n_boot, nonzero_counts):
+    """Summarize bootstrapped OrdMag barcode-count estimates.
+
+    Use this helper to convert bootstrap estimates of selected barcode counts
+    into a `BarcodeFilterResults` object with mean, variance, confidence bounds,
+    and final cutoff-aware barcode count.
+    """
     top_n_bcs_mean = np.mean(top_n_boot)
     top_n_bcs_var = np.var(top_n_boot)
     top_n_bcs_sd = np.sqrt(top_n_bcs_var)

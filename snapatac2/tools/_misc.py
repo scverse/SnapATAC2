@@ -19,28 +19,44 @@ def aggregate_X(
     file: Path | None = None,
 ) -> internal.AnnData:
     """
-    Aggregate values in adata.X in a row-wise fashion.
+    Aggregate `.X` values across cells or cell groups.
 
-    Aggregate values in adata.X in a row-wise fashion. This is used to compute
-    RPKM or RPM values stratified by user-provided groupings.
+    Use this function to create pseudobulk count profiles, optionally normalized
+    as RPM or RPKM, from all cells or from groups defined by `groupby`.
+
+    Anti-Patterns
+    -------------
+    - Do NOT use `normalize="RPKM"` unless `adata.var_names` are genomic regions
+      in `chrom:start-end` format.
+    - Do NOT expect a raw NumPy array return; the function always returns an
+      AnnData object containing the aggregated matrix.
 
     Parameters
     ----------
-    adata
-        The AnnData or AnnDataSet object.
-    groupby
-        Group the cells into different groups. If a `str`, groups are obtained
-        from `.obs[groupby]`.
-    normalize
-        normalization method: "RPM" or "RPKM".
-    file
-        if provided, the results will be saved to a new h5ad file.
+    adata : AnnData | AnnDataSet
+        Annotated data object with cells in observations and features in
+        variables.
+    groupby : str | list[str] | None
+        Grouping key in `adata.obs`, one group label per cell, or None to
+        aggregate all cells together.
+    normalize : {"RPM", "RPKM"} | None
+        Optional normalization applied to each aggregated profile.
+    file : pathlib.Path | None
+        Output h5ad path for backed results. If None, return an in-memory AnnData.
 
     Returns
     -------
-    np.ndarray | AnnData
-        If `grouby` is `None`, return a 1d array. Otherwise, return an AnnData
-        object.
+    AnnData
+        AnnData object with aggregated profiles in `.X`, original feature names
+        in `.var_names`, and group names in `.obs_names` when `groupby` is set.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> pseudobulk = snap.tl.aggregate_X(adata, groupby="cell_type", normalize="RPM")
+    >>> pseudobulk.n_vars == adata.n_vars
+    True
     """
     from anndata import AnnData
 
@@ -91,32 +107,51 @@ def aggregate_cells(
     key_added: str = 'pseudo_cell',
     inplace: bool = True,
 ) -> np.ndarray | None:
-    """Aggregate cells into pseudo-cells.
+    """Assign cells to pseudo-cell groups by iterative clustering.
 
-    Aggregate cells into pseudo-cells by iterative clustering.
+    Use this function to coarsen a cell embedding into pseudo-cell labels while
+    preserving local graph structure through repeated Leiden clustering.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass `use_rep` as an `.obs` key; it must name an embedding in
+      `adata.obsm`.
+    - Do NOT expect exactly `target_num_cells` groups; iterative splitting stops
+      when clusters cannot be split reliably.
 
     Parameters
     ----------
-    adata
-        AnnData or AnnDataSet object or matrix.
-    use_rep
-        `adata.obs` key for retrieving the input matrix.
-    target_num_cells
-        If None, `target_num_cells = num_cells / min_cluster_size`.
-    min_cluster_size
-        The minimum size of clusters.
-    random_state
-        Change the initialization of the optimization.
-    key_added
-        `adata.obs` key under which to add the cluster labels.
-    inplace
-        Whether to store the result in the anndata object.
+    adata : AnnData | AnnDataSet | np.ndarray
+        Annotated data object containing `adata.obsm[use_rep]`, or a numeric
+        matrix with cells as rows.
+    use_rep : str
+        Key in `adata.obsm` containing the input embedding.
+    target_num_cells : int | None
+        Target number of pseudo-cell groups. If None, use
+        `adata.n_obs // min_cluster_size`.
+    min_cluster_size : int
+        Minimum cluster size used during iterative splitting.
+    random_state : int
+        Seed passed to Leiden clustering.
+    key_added : str
+        Key in `adata.obs` used to store pseudo-cell labels.
+    inplace : bool
+        If True, store labels in `adata.obs[key_added]`; if False, return them.
 
     Returns
     -------
     np.ndarray | None
-        If `inplace=False`, return the result as a numpy array.
-        Otherwise, store the result in `adata.obs[`key_added`]`.
+        If `inplace=True`, stores categorical labels in `adata.obs[key_added]`
+        and returns None. If `inplace=False`, returns the labels.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import snapatac2 as snap
+    >>> X = np.random.default_rng(0).normal(size=(100, 5))
+    >>> labels = snap.tl.aggregate_cells(X, min_cluster_size=10, inplace=False)
+    >>> labels.shape
+    (100,)
     """
     def clustering(data):
         return leiden(knn(data), resolution=1, objective_function='modularity',

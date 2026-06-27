@@ -14,15 +14,52 @@ def transfer_labels(
     inplace: bool = True,
 ):
     """
-    Transfer labels.
+    Predict missing cell labels from labeled neighbors.
+
+    Use this function when `labels` contains known labels for some cells and
+    `None` for cells that should be annotated from nearest neighbors in an
+    embedding.
+
+    Anti-Patterns
+    -------------
+    - Do NOT call this when all cells already have labels; the function returns
+      None and logs a warning.
+    - Do NOT use a `labels` string with `inplace=True` unless you intend to
+      overwrite that `adata.obs` column.
 
     Parameters
     ----------
-    adata
-        AnnData or AnnDataSet object.
-    use_rep
-    labels
-        Cell labels. Labels with `None` values will be predicted.
+    adata : AnnData | AnnDataSet
+        Annotated data object containing the embedding and label metadata.
+    use_rep : str | np.ndarray
+        Key in `adata.obsm` containing the embedding, or an embedding matrix with
+        cells as rows.
+    labels : str | list[str]
+        Label key in `adata.obs`, or one label per cell. Entries equal to None
+        are predicted.
+    n_neighbors : int
+        Number of neighbors used by `sklearn.neighbors.KNeighborsClassifier`.
+    metric : str
+        Distance metric passed to the classifier.
+    inplace : bool
+        If True and `labels` is a string, overwrite `adata.obs[labels]`; otherwise
+        return the completed labels.
+
+    Returns
+    -------
+    np.ndarray | None
+        If labels are written in place or no prediction is needed, returns None.
+        Otherwise, returns an array with missing labels filled.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> labels = np.array(["known"] * 10 + [None] * (adata.n_obs - 10), dtype=object)
+    >>> predicted = snap.tl.transfer_labels(adata, "X_spectral", labels, inplace=False)
+    >>> (predicted != None).all()
+    True
     """
     from sklearn.neighbors import KNeighborsClassifier
     

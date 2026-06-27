@@ -9,15 +9,45 @@ def network_edge_stat(
     network: rx.PyDiGraph,
     **kwargs,
 ):
-    """
+    """Plot edge score distributions by source and target node type.
+
+    Use this function to inspect correlation score distributions across network
+    edge categories.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass a generic NetworkX graph. The input must be a
+      ``rustworkx.PyDiGraph`` whose nodes expose ``type`` and whose edges expose
+      score attributes such as ``cor_score``.
+    - Do NOT use this function to summarize regression scores only. The current
+      plot displays correlation score violins.
+
     Parameters
     ----------
-    network
-        Network.
-    kwargs        
-        Additional arguments passed to :func:`~snapatac2.pl.render_plot` to
-        control the final plot output. Please see :func:`~snapatac2.pl.render_plot`
-        for details.
+    network : rustworkx.PyDiGraph
+        Regulatory network whose nodes provide a ``type`` attribute and whose
+        edge data may provide ``cor_score`` and ``regr_score`` attributes.
+    **kwargs
+        Additional rendering options passed to :func:`snapatac2.pl.render_plot`,
+        such as ``show``, ``interactive``, ``out_file``, and ``scale``.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace
+    >>> import rustworkx as rx
+    >>> import snapatac2 as snap
+    >>> graph = rx.PyDiGraph()
+    >>> peak = graph.add_node(SimpleNamespace(type="peak"))
+    >>> gene = graph.add_node(SimpleNamespace(type="gene"))
+    >>> graph.add_edge(peak, gene, SimpleNamespace(cor_score=0.7, regr_score=0.2))
+    >>> fig = snap.pl.network_edge_stat(graph, show=False)
+    >>> fig.update_layout(title="Network edge scores")
     """
     from collections import defaultdict
     import plotly.graph_objects as go
@@ -52,13 +82,54 @@ def network_scores(
     interactive: bool = True,
     out_file: str | None = None,
 ):
-    """
-    score_name
-        Name of the edge attribute
-    width
-        The width of the plot
-    height
-        The height of the plot
+    """Plot average network edge scores by distance-to-TSS bin.
+
+    Use this function to inspect how an edge score changes with genomic distance
+    from transcription start sites.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass a score name that is absent from edge data objects. Each edge
+      must expose ``distance`` and the requested ``score_name`` attribute.
+    - Do NOT use this function for node-level scores. It aggregates edge-level
+      attributes only.
+
+    Parameters
+    ----------
+    network : rustworkx.PyDiGraph
+        Regulatory network whose edge data objects provide ``distance`` and the
+        score attribute named by ``score_name``.
+    score_name : str
+        Name of the edge attribute to average within each distance bin.
+    width : float
+        Width of the rendered plot in pixels.
+    height : float
+        Height of the rendered plot in pixels.
+    show : bool
+        Whether to display the figure immediately.
+    interactive : bool
+        Whether to display an interactive Plotly figure when ``show=True``.
+    out_file : str or None
+        Output path for saving the plot. Supported suffixes include ``.svg``,
+        ``.pdf``, ``.png``, and ``.html``.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace
+    >>> import rustworkx as rx
+    >>> import snapatac2 as snap
+    >>> graph = rx.PyDiGraph()
+    >>> peak = graph.add_node(SimpleNamespace(type="peak"))
+    >>> gene = graph.add_node(SimpleNamespace(type="gene"))
+    >>> graph.add_edge(peak, gene, SimpleNamespace(distance=1500, regr_score=0.4))
+    >>> fig = snap.pl.network_scores(graph, score_name="regr_score", show=False)
+    >>> fig.update_layout(title="Regression score by distance")
     """
     import plotly.express as px
     import pandas as pd

@@ -22,6 +22,43 @@ def valid_cells(
     height: int = 400,
     **kwargs,
 ):
+    """Plot ranked barcode counts on log-log axes.
+
+    Use this function to inspect the barcode rank curve before selecting a
+    fragment-count cutoff for valid cells.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass per-cell metadata tables. Pass a one-dimensional sequence of
+      counts, such as fragment counts per barcode.
+    - Do NOT use this function to filter cells. Use the plot to choose a cutoff,
+      then apply filtering explicitly in preprocessing.
+
+    Parameters
+    ----------
+    values : iterable of int or float
+        Count values to rank in descending order.
+    width : int
+        Width of the rendered plot in pixels.
+    height : int
+        Height of the rendered plot in pixels.
+    **kwargs
+        Additional rendering options passed to :func:`snapatac2.pl.render_plot`,
+        such as ``show``, ``interactive``, ``out_file``, and ``scale``.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> counts = [10000, 8500, 6200, 1200, 800, 120, 60, 20]
+    >>> fig = snap.pl.valid_cells(counts, show=False)
+    >>> fig.update_layout(title="Barcode rank curve")
+    """
     import plotly.graph_objects as go
 
     values = sorted(values, reverse=True)
@@ -55,41 +92,53 @@ def tsse(
     height: int = 400,
     **kwargs,
 ) -> 'plotly.graph_objects.Figure' | None:
-    """Plot the TSS enrichment vs. number of fragments density figure.
+    """Plot TSS enrichment against unique fragment counts.
+
+    Use this function after computing TSS enrichment scores to assess cell
+    quality and identify low-quality cells with low fragment counts or low TSS
+    enrichment.
+
+    Anti-Patterns
+    -------------
+    - Do NOT call this before running :func:`snapatac2.metrics.tsse`; the input
+      must contain ``adata.obs["tsse"]``.
+    - Do NOT interpret ``min_fragment`` as a filtering operation on ``adata``. It
+      only excludes cells from this visualization.
 
     Parameters
     ----------
-    adata
-        Annotated data matrix.
-    min_fragment
-        The cells' unique fragments lower than it should be removed
-    width
-        The width of the plot
-    height
-        The height of the plot
-    kwargs        
-        Additional arguments passed to :func:`~snapatac2.pl.render_plot` to
-        control the final plot output. Please see :func:`~snapatac2.pl.render_plot`
-        for details.
+    adata : AnnData
+        Annotated data matrix containing ``obs["tsse"]`` and
+        ``obs["n_fragment"]``.
+    min_fragment : int
+        Minimum number of unique fragments required for a cell to be included in
+        the plot.
+    width : int
+        Width of the rendered plot in pixels.
+    height : int
+        Height of the rendered plot in pixels.
+    **kwargs
+        Additional rendering options passed to :func:`snapatac2.pl.render_plot`,
+        such as ``show``, ``interactive``, ``out_file``, and ``scale``.
 
     Returns
     -------
-    'plotly.graph_objects.Figure' | None
-        If `show=False` and `out_file=None`, an `plotly.graph_objects.Figure` will be 
-        returned, which can then be further customized using the plotly API.
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
 
     See Also
     --------
-    render_plot
+    snapatac2.metrics.tsse : Compute TSS enrichment scores.
+    render_plot : Render, show, or save Plotly figures.
 
     Examples
     --------
-    .. plotly::
-
-        >>> import snapatac2 as snap
-        >>> data = snap.read(snap.datasets.pbmc5k(type='h5ad'))
-        >>> fig = snap.pl.tsse(data, show=False, out_file=None)
-        >>> fig.show()
+    >>> import snapatac2 as snap
+    >>> data = snap.read(snap.datasets.pbmc5k(type="h5ad"))
+    >>> snap.metrics.tsse(data, snap.genome.hg38)
+    >>> fig = snap.pl.tsse(data, show=False)
+    >>> fig.update_layout(title="TSS enrichment")
     """
     if "tsse" not in adata.obs:
         raise ValueError("TSS enrichment score is not computed, please run `metrics.tsse` first.")
@@ -112,7 +161,45 @@ def frag_size_distr(
     max_recorded_size: int = 1000,
     **kwargs,
 ) -> 'plotly.graph_objects.Figure' | None:
-    """ Plot the fragment size distribution.
+    """Plot the fragment size distribution.
+
+    Use this function to inspect nucleosome banding from either an AnnData
+    object or a precomputed one-dimensional fragment-size count array.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass raw fragment coordinates. Pass an AnnData object or a vector
+      whose index is fragment size and whose value is the count for that size.
+    - Do NOT expect this function to preserve an incomplete cached distribution;
+      it recomputes ``adata.uns[use_rep]`` when the stored vector is too short.
+
+    Parameters
+    ----------
+    adata : AnnData or numpy.ndarray
+        Annotated data matrix with fragment-size information, or a precomputed
+        fragment-size distribution vector.
+    use_rep : str
+        Key in ``adata.uns`` used to read or store the fragment-size
+        distribution when ``adata`` is an AnnData object.
+    max_recorded_size : int
+        Maximum fragment size, in base pairs, to compute and display.
+    **kwargs
+        Additional rendering options passed to :func:`snapatac2.pl.render_plot`,
+        such as ``show``, ``interactive``, ``out_file``, and ``scale``.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import snapatac2 as snap
+    >>> distribution = np.array([0, 5, 12, 18, 9, 3])
+    >>> fig = snap.pl.frag_size_distr(distribution, show=False)
+    >>> fig.update_layout(title="Fragment size distribution")
     """
     import plotly.graph_objects as go
 
@@ -143,29 +230,48 @@ def spectral_eigenvalues(
     interactive: bool = True,
     out_file: str | None = None,
 ) -> 'plotly.graph_objects.Figure' | None:
-    """Plot the eigenvalues of spectral embedding.
+    """Plot spectral embedding eigenvalues and mark the elbow.
+
+    Use this function after spectral decomposition to choose the number of
+    eigenvectors retained for downstream analysis.
+
+    Anti-Patterns
+    -------------
+    - Do NOT call this before computing spectral eigenvalues. The input must
+      contain ``adata.uns["spectral_eigenvalue"]``.
+    - Do NOT treat this as a pure plotting helper; it also writes the inferred
+      elbow to ``adata.uns["num_eigen"]``.
 
     Parameters
     ----------
-    adata
-        Annotated data matrix.
-    width
-        The width of the plot
-    height
-        The height of the plot
-    show
-        Show the figure.
-    interactive
-        Whether to make interactive plot
-    out_file
-        Path of the output file for saving the output image, end with
-        '.svg' or '.pdf' or '.png' or '.html'.
+    adata : AnnData
+        Annotated data matrix containing ``uns["spectral_eigenvalue"]``.
+    width : int
+        Width of the rendered plot in pixels.
+    height : int
+        Height of the rendered plot in pixels.
+    show : bool
+        Whether to display the figure immediately.
+    interactive : bool
+        Whether to display an interactive Plotly figure when ``show=True``.
+    out_file : str or None
+        Output path for saving the plot. Supported suffixes include ``.svg``,
+        ``.pdf``, ``.png``, and ``.html``.
 
     Returns
     -------
-    'plotly.graph_objects.Figure' | None
-        If `show=False` and `out_file=None`, an `plotly.graph_objects.Figure` will be 
-        returned, which can then be further customized using the plotly API.
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import snapatac2 as snap
+    >>> adata = snap.AnnData(X=np.ones((3, 3)))
+    >>> adata.uns["spectral_eigenvalue"] = np.array([4.0, 2.5, 1.2, 0.4])
+    >>> fig = snap.pl.spectral_eigenvalues(adata, show=False)
+    >>> fig.update_layout(title="Spectral eigenvalues")
     """
  
     import plotly.express as px
@@ -191,33 +297,52 @@ def regions(
     interactive: bool = True,
     out_file: str | None = None,
 ) -> 'plotly.graph_objects.Figure' | None:
-    """
+    """Plot grouped accessibility over selected peak regions.
+
+    Use this function to compare normalized accessibility across groups for a
+    supplied peak set.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass peaks that are absent from ``adata.var_names``; each peak name
+      must map to a variable in the input matrix.
+    - Do NOT use this function for very large peak sets when exact display is
+      required. Inputs above 50,000 peaks are randomly downsampled for plotting.
+
     Parameters
     ----------
-    adata
-        Annotated data matrix.
-    groupby
-        Group the cells into different groups. If a `str`, groups are obtained from
-        `.obs[groupby]`.
-    peaks
-        Peaks of each group.
-    width
-        The width of the plot
-    height
-        The height of the plot
-    show
-        Show the figure
-    interactive
-        Whether to make interactive plot
-    out_file
-        Path of the output file for saving the output image, end with
-        '.svg' or '.pdf' or '.png' or '.html'.
+    adata : AnnData or AnnDataSet
+        Annotated data matrix with peaks in ``var_names``.
+    groupby : str or list of str
+        Cell grouping definition. If a string, groups are read from
+        ``adata.obs[groupby]``.
+    peaks : dict of (str, list of str)
+        Mapping from group names to peak names to include in the heatmap.
+    width : float
+        Width of the rendered plot in pixels.
+    height : float
+        Height of the rendered plot in pixels.
+    show : bool
+        Whether to display the figure immediately.
+    interactive : bool
+        Whether to display an interactive Plotly figure when ``show=True``.
+    out_file : str or None
+        Output path for saving the plot. Supported suffixes include ``.svg``,
+        ``.pdf``, ``.png``, and ``.html``.
 
     Returns
     -------
-    'plotly.graph_objects.Figure' | None
-        If `show=False` and `out_file=None`, an `plotly.graph_objects.Figure` will be 
-        returned, which can then be further customized using the plotly API.
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.read(snap.datasets.pbmc5k(type="h5ad"))
+    >>> peaks = {"selected": list(adata.var_names[:20])}
+    >>> fig = snap.pl.regions(adata, groupby="cell_type", peaks=peaks, show=False)
+    >>> fig.update_layout(title="Grouped accessibility")
     """
     import polars as pl
     import plotly.graph_objects as go
@@ -263,34 +388,53 @@ def umap(
     sample_size: int | None = None,
     **kwargs,
 ) -> 'plotly.graph_objects.Figure' | None:
-    """Plot the UMAP embedding.
+    """Plot a two- or three-dimensional UMAP embedding.
+
+    Use this function to visualize cells from ``adata.obsm[use_rep]`` or from a
+    numeric embedding array.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass ``color`` as a column name when ``adata`` is a raw NumPy array;
+      provide an array of color values instead.
+    - Do NOT use ``sample_size`` when every point must be displayed. Sampling is
+      random and only affects the plotted points.
 
     Parameters
     ----------
-    adata
-        Annotated data matrix.
-    color
-        If the input is a string, it will be used the key to retrieve values from
-        `obs`.
-    use_rep
-        Use the indicated representation in `.obsm`.
-    marker_size
-        Size of the dots.
-    marker_opacity
-        Opacity of the dots.
-    sample_size
-        If the number of cells is larger than `sample_size`, a random sample of
-        `sample_size` cells will be used for plotting.
-    kwargs        
-        Additional arguments passed to :func:`~snapatac2.pl.render_plot` to
-        control the final plot output. Please see :func:`~snapatac2.pl.render_plot`
-        for details.
+    adata : AnnData or numpy.ndarray
+        Annotated data matrix containing ``obsm[use_rep]``, or an embedding array
+        with cells as rows and coordinates as columns.
+    color : str, numpy.ndarray, or None
+        Observation column name to color by when ``adata`` is AnnData, or a
+        vector of color values aligned to the embedding rows.
+    use_rep : str
+        Key in ``adata.obsm`` containing the UMAP coordinates.
+    marker_size : float or None
+        Marker size. If ``None``, choose a size from the number of plotted cells.
+    marker_opacity : float
+        Marker opacity between 0 and 1.
+    sample_size : int or None
+        Maximum number of cells to plot. If the embedding has more rows,
+        randomly sample this many rows without replacement.
+    **kwargs
+        Additional rendering options passed to :func:`snapatac2.pl.render_plot`,
+        such as ``show``, ``interactive``, ``out_file``, and ``scale``.
 
     Returns
     -------
-    'plotly.graph_objects.Figure' | None
-        If `show=False` and `out_file=None`, an `plotly.graph_objects.Figure` will be 
-        returned, which can then be further customized using the plotly API.
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import snapatac2 as snap
+    >>> embedding = np.array([[0.0, 0.1], [1.0, 1.1], [2.0, 0.9]])
+    >>> labels = np.array(["A", "B", "A"])
+    >>> fig = snap.pl.umap(embedding, color=labels, show=False)
+    >>> fig.update_layout(title="UMAP")
     """
     from natsort import index_natsorted
 
@@ -330,26 +474,53 @@ def motif_enrichment(
     max_fdr: float = 0.01,
     **kwargs,
 ) -> 'plotly.graph_objects.Figure' | None:
-    """Plot the motif enrichment result.
+    """Plot motif enrichment scores across groups.
+
+    Use this function to summarize motif enrichment tables returned for multiple
+    groups as a clustered heatmap.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass a single enrichment table. Pass a mapping from group names to
+      Polars DataFrames with matching motif rows.
+    - Do NOT rename required columns. Each table must contain ``id``,
+      ``log2(fold change)``, ``adjusted p-value``, and ``p-value``.
 
     Parameters
     ----------
-    enrichment
-        Motif enrichment result.
-    min_log_fc
-        Retain motifs that satisfy: log2-fold-change >= `min_log_fc`.
-    max_fdr
-        Retain motifs that satisfy: FDR <= `max_fdr`.
-    kwargs        
-        Additional arguments passed to :func:`~snapatac2.pl.render_plot` to
-        control the final plot output. Please see :func:`~snapatac2.pl.render_plot`
-        for details.
+    enrichment : dict of (str, polars.DataFrame)
+        Mapping from group names to motif enrichment result tables. Tables must
+        have aligned rows and include required motif statistics columns.
+    min_log_fc : float
+        Keep motifs with at least one absolute log2 fold-change greater than or
+        equal to this value.
+    max_fdr : float
+        Keep motifs with at least one adjusted p-value less than or equal to this
+        value.
+    **kwargs
+        Additional rendering options passed to :func:`snapatac2.pl.heatmap` and
+        :func:`snapatac2.pl.render_plot`, such as ``show``, ``interactive``,
+        ``out_file``, and clustering options accepted by ``heatmap``.
 
     Returns
     -------
-    'plotly.graph_objects.Figure' | None
-        If `show=False` and `out_file=None`, an `plotly.graph_objects.Figure` will be 
-        returned, which can then be further customized using the plotly API.
+    plotly.graph_objects.Figure or None
+        Returns a Plotly figure when ``show=False`` and ``out_file=None``;
+        otherwise renders or saves the plot and returns ``None``.
+
+    Examples
+    --------
+    >>> import polars as pl
+    >>> import snapatac2 as snap
+    >>> table = pl.DataFrame({
+    ...     "id": ["MA0001.1", "MA0002.1"],
+    ...     "log2(fold change)": [1.5, -0.8],
+    ...     "adjusted p-value": [0.001, 0.2],
+    ...     "p-value": [1e-5, 0.05],
+    ... })
+    >>> enrichment = {"cluster_1": table, "cluster_2": table}
+    >>> fig = snap.pl.motif_enrichment(enrichment, show=False)
+    >>> fig.update_layout(title="Motif enrichment")
     """
  
     import pandas as pd
@@ -388,30 +559,55 @@ def coverage(
     groupby: str | list[str],
     out_file: str | None = None,
 ):
-    """
-    Plot the coverage tracks for different groups of cells. This function requires
-    `matplotlib` to be installed.
+    """Plot coverage tracks for grouped cells across one genomic region.
+
+    Use this function for quick local inspection of coverage patterns. Install
+    ``matplotlib`` before calling it.
 
     This is a simple implementation for quick visualization. For more advanced
-    visualization, please consider exporting the data using 
-    :func:`~snapatac2.ex.export_coverage` and visualize it using a genome browser.
+    visualization, export the data with :func:`snapatac2.ex.export_coverage` and
+    inspect it in a genome browser.
+
+    Anti-Patterns
+    -------------
+    - Do NOT use this function for publication-scale genome browser tracks;
+      export coverage files instead.
+    - Do NOT pass multiple genomic intervals. ``region`` must be a single string
+      formatted as ``"chrom:start-end"``.
 
     Parameters
     ----------
-    adata
-        Annotated data matrix.
-    region
-        Genomic region, e.g. 'chr1:100000-200000'.
-    groupby
-        Group the cells into different groups. If a `str`, groups are obtained from
-        `.obs[groupby]`.
-    out_file
-        Path of the output file for saving the output image.
+    adata : AnnData
+        Annotated data matrix with fragments available for coverage retrieval.
+    region : str
+        Genomic interval to plot, formatted as ``"chrom:start-end"``; for
+        example, ``"chr1:100000-200000"``.
+    groupby : str or list of str
+        Cell grouping definition. If a string, groups are read from
+        ``adata.obs[groupby]``.
+    out_file : str or None
+        Output path for saving the Matplotlib figure. If ``None``, display the
+        plot with ``matplotlib.pyplot.show``.
+
+    Returns
+    -------
+    None
+        Displays or saves the Matplotlib figure.
 
     See Also
     --------
-    export_coverage
-    :func:`~snapatac2.ex.export_coverage` 
+    snapatac2.ex.export_coverage : Export coverage tracks for genome browsers.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.read(snap.datasets.pbmc5k(type="h5ad"))
+    >>> snap.pl.coverage(
+    ...     adata,
+    ...     region="chr1:100000-200000",
+    ...     groupby="cell_type",
+    ...     out_file="coverage.png",
+    ... )
     """
 
     from matplotlib import pyplot as plt

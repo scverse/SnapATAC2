@@ -25,55 +25,70 @@ def scrublet(
     verbose: bool = True,
 ) -> None:
     """
-    Compute probability of being a doublet using the scrublet algorithm.
+    Score ATAC-seq cells for doublet likelihood with Scrublet.
 
-    This function identifies doublets by generating simulated doublets using
-    randomly pairing chromatin accessibility profiles of individual cells.
-    The simulated doublets are then embedded alongside the original cells using
-    the spectral embedding algorithm in this package.
-    A k-nearest-neighbor classifier is trained to distinguish between the simulated
-    doublets and the authentic cells.
-    This trained classifier produces a "doublet score" for each cell.
-    The doublet scores are then converted into probabilities using a Gaussian mixture model.
+    Use this function after constructing a cell-by-feature count matrix to add
+    doublet probabilities and doublet scores to cells. The algorithm simulates
+    doublets by summing randomly paired observed cells, embeds observed and
+    simulated profiles together with spectral embedding, computes neighbor-based
+    doublet scores, and converts scores to probabilities with a Gaussian mixture
+    model.
+
+    Anti-Patterns
+    -------------
+    - Do NOT run this function before selecting features when `features="selected"`;
+      call `snap.pp.select_features` first or pass `features=None`.
+    - Do NOT interpret `doublet_score` as a calibrated probability; use
+      `doublet_probability` for probability-threshold filtering.
 
     Parameters
     ----------
     adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-        `adata` can also be a list of AnnData objects.
-        In this case, the function will be applied to each AnnData object in parallel.
+        AnnData-like object with a count matrix in `.X`, or a list of AnnData-like
+        objects. When a list is provided, the function processes objects in
+        parallel.
     features
-        Boolean index mask, where `True` means that the feature is kept, and
-        `False` means the feature is removed.
+        Features used for scoring. If a string, read a boolean mask from
+        `adata.var[features]`. If an array, `True` keeps a feature and `False`
+        removes it. If `None`, use all features.
     n_comps
-        Number of components. 15 is usually sufficient. The algorithm is not sensitive
-        to this parameter.
+        Number of spectral components used to embed observed and simulated cells.
     sim_doublet_ratio
-        Number of doublets to simulate relative to the number of observed cells.
+        Number of simulated doublets relative to the number of observed cells.
     expected_doublet_rate
-        Expected doublet rate.
+        Prior expected doublet rate used in score calculation.
     n_neighbors
         Number of neighbors used to construct the KNN graph of observed
-        cells and simulated doublets. If `None`, this is 
-        set to round(0.5 * sqrt(n_cells))
+        cells and simulated doublets. If `None`, use
+        `round(0.5 * sqrt(n_cells))`.
     use_approx_neighbors
-        Whether to use approximate search.
+        Whether to use approximate nearest-neighbor search.
     random_state
-        Random state.
+        Random seed for doublet simulation and probability modeling.
     inplace
-        Whether update the AnnData object inplace
+        If `True`, store scores in `adata`. If `False`, return arrays.
     n_jobs
-        Number of jobs to run in parallel.
+        Number of jobs to run in parallel when `adata` is a list.
     verbose
         Whether to print progress messages.
     
     Returns
     -------
-    tuple[np.ndarray, np.ndarray] | None:
-        if ``inplace = True``, it updates adata with the following fields:
-            - ``adata.obs["doublet_probability"]``: probability of being a doublet
-            - ``adata.obs["doublet_score"]``: doublet score
+    tuple[np.ndarray, np.ndarray] | list[tuple[np.ndarray, np.ndarray]] | None
+        If `inplace=False`, returns `(doublet_probability, doublet_score)` for a
+        single object or a list of such tuples for a list of objects. If
+        `inplace=True`, returns `None` and writes `doublet_probability` and
+        `doublet_score` to `.obs`, plus simulated scores to
+        `.uns["scrublet_sim_doublet_score"]`.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.read(snap.datasets.pbmc5k(type="h5ad"), backed=None)
+    >>> snap.pp.select_features(adata)
+    >>> snap.pp.scrublet(adata, n_comps=5, sim_doublet_ratio=0.5, verbose=False)
+    >>> {"doublet_probability", "doublet_score"}.issubset(adata.obs.columns)
+    True
     """
     if isinstance(adata, list):
         result = anndata_par(
@@ -131,41 +146,58 @@ def filter_doublets(
     n_jobs: int = 8,
     verbose: bool = True,
 ) -> np.ndarray | None:
-    """Remove doublets according to the doublet probability or doublet score.
+    """Remove cells classified as doublets.
 
-    The user can choose to remove doublets by either the doublet probability or the doublet score.
-    :func:`~snapatac2.pp.scrublet` must be ran first in order to use this function.
+    Use this function after `scrublet` to subset an AnnData object or return a
+    boolean mask of cells to keep. Filter by either calibrated doublet
+    probability or raw doublet score.
+
+    Anti-Patterns
+    -------------
+    - Do NOT call this function before `snap.pp.scrublet`; it requires
+      `doublet_probability` or `doublet_score` in `.obs`.
+    - Do NOT set both `probability_threshold` and `score_threshold`; choose one
+      filtering criterion.
 
     Parameters
     ----------
     adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
+        AnnData-like object with Scrublet scores in `.obs`, or a list of such
+        objects. When a list is provided, the function processes objects in
+        parallel.
     probability_threshold
-        Threshold for doublet probability. Doublet probability greater than
-        this threshold will be removed. The default value is 0.5. Using a lower
-        threshold will remove more cells.
+        Remove cells with `doublet_probability` greater than this value. Lower
+        values remove more cells. Set to `None` when using `score_threshold`.
     score_threshold
-        Threshold for doublet score. Doublet score greater than this threshold
-        will be removed. Only one of `probability_threshold` and `score_threshold`
-        can be set. Using `score_threshold` is not recommended for most cases.
+        Remove cells with `doublet_score` greater than this value. Set to `None`
+        when using `probability_threshold`.
     inplace
-        Perform computation inplace or return result.
+        If `True`, subset `adata` in place. If `False`, return a keep mask.
     n_jobs
-        Number of jobs to run in parallel.
+        Number of jobs to run in parallel when `adata` is a list.
     verbose
         Whether to print progress messages.
 
     Returns
     -------
-    np.ndarray | None:
-        If `inplace = True`, directly subsets the data matrix. Otherwise return 
-        a boolean index mask that does filtering, where `True` means that the
-        cell is kept, `False` means the cell is removed.
+    np.ndarray | list[np.ndarray] | None
+        If `inplace=False`, returns a boolean mask where `True` keeps a cell and
+        `False` removes a doublet. If `inplace=True`, returns `None` and subsets
+        the object in place.
 
     See Also
     --------
     scrublet
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.read(snap.datasets.pbmc5k(type="h5ad"), backed=None)
+    >>> snap.pp.select_features(adata)
+    >>> snap.pp.scrublet(adata, n_comps=5, sim_doublet_ratio=0.5, verbose=False)
+    >>> keep = snap.pp.filter_doublets(adata, probability_threshold=0.5, inplace=False, verbose=False)
+    >>> keep.dtype == bool
+    True
     """
     if isinstance(adata, list):
         result = anndata_par(
@@ -329,18 +361,39 @@ def calculate_doublet_scores(
     use_approx_neighbors=False,
     random_state: int = 0,
 ) -> None:
-    """
+    """Calculate observed and simulated doublet scores from neighbor composition.
+
+    Use this function after embedding observed cells and simulated doublets into
+    the same manifold. The score estimates how strongly each point is surrounded
+    by simulated doublets after adjusting for the expected doublet rate.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass manifolds from different feature spaces or preprocessing
+      pipelines; observed and simulated points must share coordinates.
+    - Do NOT interpret the scores as calibrated probabilities. Use
+      `get_doublet_probability` when probability-like values are needed.
+
     Parameters
     ----------
     manifold_obs
-        Manifold of observations
+        Low-dimensional coordinates for observed cells.
     manifold_sim
-        Manifold of simulated doublets
+        Low-dimensional coordinates for simulated doublets.
     k
-        Number of nearest neighbors
+        Number of nearest neighbors used before simulation-ratio adjustment.
     exp_doub_rate
+        Expected doublet rate used in the Bayesian score calculation.
     stdev_doub_rate
+        Standard deviation of the expected doublet rate.
+    use_approx_neighbors
+        Whether to use approximate nearest-neighbor search.
     random_state
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Doublet scores for observed cells and simulated doublets.
     """
     from sklearn.neighbors import NearestNeighbors
 
@@ -400,6 +453,34 @@ def get_doublet_probability(
     random_state: int = 0,
     verbose: bool = False,
 ):
+    """Convert doublet scores to doublet probabilities with a two-component model.
+
+    Use this function after `calculate_doublet_scores` to map observed doublet
+    scores onto the high-score component learned from simulated doublets.
+
+    Anti-Patterns
+    -------------
+    - Do NOT call this before simulating doublets and calculating doublet scores.
+    - Do NOT assume the returned values are universal calibration probabilities;
+      they depend on the simulated score distribution for the current dataset.
+
+    Parameters
+    ----------
+    doublet_scores_sim
+        Doublet scores calculated for simulated doublets.
+    doublet_scores
+        Doublet scores calculated for observed cells.
+    random_state
+        Random seed used by the Bayesian Gaussian mixture model.
+    verbose
+        Whether to log fitted mixture-model means.
+
+    Returns
+    -------
+    np.ndarray
+        Probability-like values for observed cells belonging to the high-score
+        doublet component.
+    """
     from sklearn.mixture import BayesianGaussianMixture
 
     X = doublet_scores_sim.reshape((-1, 1))

@@ -23,67 +23,75 @@ def scanorama_integrate(
     **kwargs,
 ):
     """
-    Use Scanorama [Hie19]_ to integrate different experiments.
+    Integrate batch-specific embeddings with Scanorama.
 
-    Scanorama [Hie19]_ is an algorithm for integrating single-cell
-    data from multiple experiments stored in an AnnData object. This
-    function should be run after performing `tl.spectral` but before computing
-    the neighbor graph, as illustrated in the example below.
+    Use this function after `snap.tl.spectral` and before `snap.pp.knn` to align
+    cells from multiple batches. The function reads the input embedding from
+    `adata.obsm[use_rep]` for AnnData-like input, or directly uses a NumPy array
+    when `adata` is an array. It uses the Scanorama implementation from
+    https://github.com/brianhie/scanorama.
 
-    This uses the implementation of `scanorama
-    <https://github.com/brianhie/scanorama>`__ [Hie19]_.
+    Anti-Patterns
+    -------------
+    - Do NOT run Scanorama on raw count matrices; provide a reduced embedding
+      such as `X_spectral`.
+    - Do NOT pass `batch` as a column name when `adata` is a NumPy array; provide
+      one label per observation instead.
 
     Parameters
     ----------
-    data
-        Matrice or AnnData object. Matrices should be shaped like n_obs x n_vars.
+    adata
+        AnnData-like object with `use_rep` in `.obsm`, AnnDataSet-like object,
+        or a NumPy array of shape `n_obs` x `n_components`.
     batch
-        Batch labels for cells. If a string, labels will be obtained from `obs`.
+        Column name in `.obs` that identifies batches, or a list of labels with
+        one entry per observation.
     n_neighbors
-        Number of mutual nearest neighbors.
+        Number of mutual nearest neighbors used by Scanorama.
     use_rep
-        Use the indicated representation in `.obsm`.
+        Key in `.obsm` containing the input embedding.
     use_dims
-        Use these dimensions in `use_rep`.
+        Dimensions of `use_rep` or the input array to use. If an integer, use the
+        first `use_dims` columns. If a list, use those column indices.
     groupby
-        If specified, split the data into groups and perform batch correction
-        on each group separately.
+        Column name or labels used to split cells and run Scanorama
+        independently within each group.
     key_added
-        If specified, add the result to ``adata.obsm`` with this key. Otherwise,
-        it will be stored in ``adata.obsm[use_rep + "_scanorama"]``.
+        Key used to store the corrected embedding. If `None`, store it in
+        `.obsm[use_rep + "_scanorama"]`.
+    sigma
+        Gaussian kernel width passed to Scanorama.
+    approx
+        Whether Scanorama uses approximate nearest-neighbor search.
+    alpha
+        Alignment score cutoff passed to Scanorama.
+    batch_size
+        Batch size passed to Scanorama for nearest-neighbor search.
     inplace
-        Whether to store the result in the anndata object.
+        If `True` and `adata` is AnnData-like, store the corrected embedding in
+        `.obsm`. Ignored for NumPy input.
+    kwargs
+        Additional arguments passed to `scanorama.assemble()`.
 
     Returns
     -------
     np.ndarray | None
-        if `inplace=True` it updates adata with the field
-        ``adata.obsm[`use_rep`_scanorama]``, containing adjusted principal components.
-        Otherwise, it returns the result as a numpy array.
+        Corrected embedding of shape `n_obs` x `n_selected_components` when
+        `inplace=False` or when `adata` is a NumPy array. Returns `None` when
+        `inplace=True` and stores the result in `.obsm`.
     
     See Also
     --------
     :func:`~snapatac2.tl.spectral`: compute spectral embedding of the data matrix.
 
-    Example
-    -------
-    First, load libraries and example dataset, and preprocess.
-
+    Examples
+    --------
     >>> import snapatac2 as snap
     >>> adata = snap.read(snap.datasets.pbmc5k(type='h5ad'), backed=None)
     >>> snap.pp.select_features(adata)
     >>> snap.tl.spectral(adata)
-
-    We now arbitrarily assign a batch metadata variable to each cell
-    for the sake of example, but during real usage there would already
-    be a column in ``adata.obs`` giving the experiment each cell came
-    from.
-
-    >>> adata.obs['batch'] = 2218*['a'] + 2218*['b']
-
-    Finally, run Scanorama. Afterwards, there will be a new table in
-    ``adata.obsm`` containing the Scanorama embeddings.
-
+    >>> midpoint = adata.n_obs // 2
+    >>> adata.obs['batch'] = ['a'] * midpoint + ['b'] * (adata.n_obs - midpoint)
     >>> snap.pp.scanorama_integrate(adata, batch='batch')
     >>> 'X_spectral_scanorama' in adata.obsm
     True

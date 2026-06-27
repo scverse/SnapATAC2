@@ -28,77 +28,85 @@ def macs3(
     inplace: bool = True,
     n_jobs: int = 8,
 ) -> dict[str, "polars.DataFrame"] | None:
-    """Call peaks using MACS3.
+    """Call open chromatin peaks with MACS3.
+
+    Use this function to call peaks for all cells, for each cell group, or for
+    reproducible group-by-replicate pseudobulk profiles.
+
+    Anti-Patterns
+    -------------
+    - Do NOT set `replicate` without `groupby`; reproducible peak calling is
+      defined within groups.
+    - Do NOT use `call_broad_peaks=True` only to relax peak stringency; instead,
+      raise `qvalue` when broad/nested peak structure is not needed.
+    - Do NOT pass a blacklist in a non-BED coordinate system; it must match the
+      genome used to generate fragments.
 
     Parameters
     ----------
-    adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-    groupby
-        Group the cells before peak calling. If a `str`, groups are obtained from
-        `.obs[groupby]`. If None, peaks will be called for all cells.
-    qvalue
-        qvalue cutoff used in MACS3.
-    call_broad_peaks
-        If True, MACS3 will call broad peaks. The broad peak calling process
+    adata : AnnData | AnnDataSet
+        Annotated fragment/count object with reference sequence metadata in
+        `adata.uns["reference_sequences"]`.
+    groupby : str | list[str] | None
+        Grouping key in `adata.obs`, one group label per cell, or None to call
+        peaks on all cells together.
+    qvalue : float
+        MACS3 q-value cutoff for peak calling.
+    call_broad_peaks : bool
+        If True, call broad peaks. The broad peak calling process
         utilizes two distinct cutoffs to discern broader, weaker peaks (`broad_cutoff`)
         and narrower, stronger peaks (`qvalue`), which are subsequently nested to
-        provide a detailed peak landscape. To conceptualize "nested" peaks, picture
-        a gene structure housing regions analogous to exons (strong peaks) and
-        introns coupled with UTRs (weak peaks). Please note that, if you only want to
-        call "broader" peak and not interested in the nested peak structure, please
-        simply use `qvalue` with weaker cutoff instead of using `call_broad_peaks` option.
-    broad_cutoff
-        qvalue cutoff used in MACS3 for calling broad peaks.
-    replicate
-        Replicate information. If provided, reproducible peaks will be called
-        for each group.
-    replicate_qvalue
-        qvalue cutoff used in MACS3 for calling peaks in replicates.
-        This parameter is only used when `replicate` is provided.
-        Typically this parameter is used to call peaks in replicates with a more lenient cutoff.
-        If not provided, `qvalue` will be used.
-    max_frag_size
-        Maximum fragment size. If provided, fragments with sizes larger than
-        `max_frag_size` will be not be used in peak calling.
-        This is used in ATAC-seq data to remove fragments that are not
-        from nucleosome-free regions.
-        You can use :func:`~snapatac2.pl.frag_size_distr` to choose a proper value for
-        this parameter.
-    selections
-        Call peaks for the selected groups only.
-    nolambda
-        If True, macs3 will use the background lambda as local lambda.
-        This means macs3 will not consider the local bias at peak candidate regions.
-    shift
-        The shift size in MACS.
-    extsize
-        The extension size in MACS.
-    min_len
-        The minimum length of a called peak. If None, it is set to `extsize`.
-    blacklist
-        Path to the blacklist file in BED format. If provided, regions in the blacklist will be
-        removed.
-    key_added
-        `.uns` key under which to add the peak information.
-    tempdir
-        If provided, a temporary directory will be created in the directory.
-        Otherwise, a temporary directory will be created in the system default temporary directory.
-    inplace
-        Whether to store the result inplace.
-    n_jobs
-        Number of processes to use for peak calling.
+        provide a nested peak landscape.
+    broad_cutoff : float
+        MACS3 q-value cutoff for broad peaks.
+    replicate : str | list[str] | None
+        Replicate key in `adata.obs`, one replicate label per cell, or None.
+    replicate_qvalue : float | None
+        MACS3 q-value cutoff for replicate-level calls. If None, reuse `qvalue`.
+    max_frag_size : int | None
+        Maximum fragment size retained for peak calling. If None, use all
+        fragments.
+    selections : set[str] | None
+        Subset of group names to call. Ignored when `groupby` is None.
+    nolambda : bool
+        If True, disable MACS3 local lambda bias correction.
+    shift : int
+        MACS3 shift size.
+    extsize : int
+        MACS3 extension size.
+    min_len : int | None
+        Minimum peak length. If None, use `extsize`.
+    blacklist : pathlib.Path | None
+        BED file of regions to remove from called peaks.
+    key_added : str
+        Key prefix in `adata.uns` used to store peak tables.
+    tempdir : pathlib.Path | None
+        Directory in which to create temporary files. If None, use the system
+        temporary directory.
+    inplace : bool
+        If True, store peak tables in `adata.uns`; if False, return them.
+    n_jobs : int
+        Number of worker processes for grouped peak calling.
 
     Returns
     -------
     dict[str, 'polars.DataFrame'] | None
-        If `inplace=True` it stores the result in `adata.uns[`key_added`]`.
-        Otherwise, it returns the result as dataframes.
+        If `inplace=True`, stores peak tables in `adata.uns[key_added]` for
+        grouped calls or `adata.uns[key_added + "_pseudobulk"]` for bulk calls,
+        then returns None. If `inplace=False`, returns peak tables keyed by group
+        name, or a single table for bulk mode.
 
     See Also
     --------
     merge_peaks
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> peaks = snap.tl.macs3(adata, groupby="cell_type", inplace=False, n_jobs=1)
+    >>> isinstance(peaks, dict)
+    True
     """
     from MACS3.Signal.PeakDetect import PeakDetect
     from math import log
@@ -215,10 +223,10 @@ def merge_peaks(
     chrom_sizes: dict[str, int] | Genome,
     half_width: int = 250,
 ) -> "polars.DataFrame":
-    """Merge peaks from different groups.
+    """Merge group-specific peak calls into a non-overlapping peak set.
 
-    Merge peaks from different groups. It is typically used to merge
-    results from :func:`~snapatac2.tools.macs3`.
+    Use this function after :func:`macs3` to create a shared peak universe for
+    downstream counting and analysis.
 
     This function initially expands the summits of identified peaks by `half_width`
     on both sides. Following this expansion, it addresses the issue of overlapping
@@ -229,24 +237,41 @@ def merge_peaks(
     all peaks have been evaluated, resulting in a final list of non-overlapping
     peaks, each with a fixed width determined by the initial extension.
 
+    Anti-Patterns
+    -------------
+    - Do NOT pass chromosome sizes from a different genome build than the peak
+      coordinates.
+    - Do NOT pass arbitrary BED-like tables unless they contain the columns
+      produced by :func:`macs3`.
+
     Parameters
     ----------
-    peaks
-        Peak information from different groups.
-    chrom_sizes
-        Chromosome sizes. If a :class:`~snapatac2.genome.Genome` is provided,
-        chromosome sizes will be obtained from the genome.
-    half_width
-        Half width of the merged peaks.
+    peaks : dict[str, polars.DataFrame]
+        Peak tables keyed by group name.
+    chrom_sizes : dict[str, int] | Genome
+        Chromosome sizes, or a Genome object from which chromosome sizes are
+        read.
+    half_width : int
+        Number of bases added on each side of each summit before overlap
+        resolution.
 
     Returns
     -------
     'polars.DataFrame'
-        A dataframe with merged peaks.
+        Merged, non-overlapping peak table.
 
     See Also
     --------
     macs3
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> peaks = snap.tl.macs3(adata, groupby="cell_type", inplace=False, n_jobs=1)
+    >>> merged = snap.tl.merge_peaks(peaks, snap.genome.hg38)
+    >>> merged.height > 0
+    True
     """
     import pandas as pd
     import polars as pl

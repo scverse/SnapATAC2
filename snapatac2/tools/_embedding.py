@@ -23,31 +23,56 @@ def umap(
     **kwargs
 ) -> np.ndarray | None:
     """
+    Compute a UMAP embedding from an existing representation.
+
+    Use this function after computing a low-dimensional representation such as
+    `X_spectral`. Pass a NumPy array directly when you want the embedding returned
+    instead of written to an AnnData object.
+
+    Anti-Patterns
+    -------------
+    - Do NOT set `inplace=True` when passing a raw NumPy array; arrays cannot store
+      `.obsm` results and the embedding is returned instead.
+    - Do NOT pass cluster labels through `key_added`; this key names
+      `adata.obsm["X_" + key_added]`, not `adata.obs`.
+
     Parameters
     ----------
-    adata
-        The annotated data matrix.
-    n_comps
-        The number of dimensions of the embedding.
-    use_dims
-        Use these dimensions in `use_rep`.
-    use_rep
-        Use the indicated representation in `.obsm`.
-    key_added
-        `adata.obs` key under which to add the cluster labels.
-    random_state
-        Random seed.
-    inplace
-        Whether to store the result in the anndata object.
+    adata : AnnData | AnnDataSet | np.ndarray
+        Annotated data object containing `adata.obsm[use_rep]`, or a numeric
+        matrix with shape `(n_cells, n_features)`.
+    n_comps : int
+        Number of UMAP dimensions to compute.
+    use_dims : int | list[int] | None
+        Dimensions from `use_rep` to use. If an integer, use the first
+        `use_dims` columns; if a list, use those column indices; if None, use
+        all columns.
+    use_rep : str
+        Key in `adata.obsm` containing the input representation.
+    key_added : str
+        Suffix for the output key `adata.obsm["X_" + key_added]`.
+    random_state : int | None
+        Random seed passed to `umap.UMAP`.
+    inplace : bool
+        If True, store the embedding in `adata.obsm`; if False, return it.
     **kwargs
-        Other parameters defined in umap.UMAP
+        Additional keyword arguments passed to `umap.UMAP`.
 
     Returns
     -------
     np.ndarray | None
-        if `inplace=True` it stores UMAP embedding in
-        `adata.obsm["X_`key_added`"]`.
-        Otherwise, it returns the result as a numpy array.
+        If `inplace=True` and `adata` is an AnnData object, stores the embedding
+        in `adata.obsm["X_" + key_added]` and returns None. Otherwise, returns
+        the embedding with shape `(n_cells, n_comps)`.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import snapatac2 as snap
+    >>> X = np.random.default_rng(0).normal(size=(20, 5))
+    >>> embedding = snap.tl.umap(X, n_comps=2, inplace=False, n_neighbors=5)
+    >>> embedding.shape
+    (20, 2)
     """
     from umap import UMAP
 
@@ -93,15 +118,21 @@ def spectral(
     num_threads: int = 32,
 ) -> tuple[np.ndarray, np.ndarray] | None:
     """
-    Perform dimension reduction using Laplacian Eigenmaps.
+    Compute a spectral embedding with Laplacian Eigenmaps.
 
-    Convert the cell-by-feature count matrix into lower dimensional representations
-    using the spectrum of the normalized graph Laplacian defined by pairwise similarity
-    between cells.
-    This function utilizes the matrix-free spectral embedding algorithm to compute
-    the embedding when `distance_metric` is "cosine", which scales linearly with the
-    number of cells. For other types of similarity metrics, the time and space complexity
-    scale quadratically with the number of cells.
+    Use this function to convert a cell-by-feature matrix into a lower-dimensional
+    representation before neighbor graph construction, clustering, and visualization.
+    With `distance_metric="cosine"`, the matrix-free implementation scales linearly
+    with the number of cells. Other distance metrics materialize pairwise similarity
+    matrices and scale quadratically with cell count.
+
+    Anti-Patterns
+    -------------
+    - Do NOT use `distance_metric="jaccard"` on very large datasets without
+      `sample_size`; the full pairwise computation can require quadratic memory.
+    - Do NOT assume exactly `n_comps` components are returned when
+      `weighted_by_sd=True`; small negative eigenvalues may be removed.
+    - Do NOT leave `features="selected"` unless `adata.var["selected"]` exists.
     
     Note
     ----
@@ -130,51 +161,53 @@ def spectral(
 
     Parameters
     ----------
-    adata
-        AnnData or AnnDataSet object.
-    n_comps
-        Number of dimensions to keep. The result is insensitive to this parameter when
-        `weighted_by_sd` is set to True, as long as it is large enough, e.g. 30.
-    features
-        Boolean index mask. True means that the feature is kept.
-        False means the feature is removed. If `features=None`, all features are used.
-    random_state
-        Seed of the random state generator
-    sample_size
-        Approximate the embedding using the Nystrom algorithm by selecting
-        a subset of cells. It could be either an integer
-        indicating the number of cells to sample or a real value from 0 to 1
-        indicating the fraction of cells to sample. When `sample_size` is None,
-        the full matrix is used. Using this only when the number of cells is too large, e.g. > 10,000,000, or
-        the `distance_metric` is "jaccard".
-    chunk_size
-        Chunk size used in the Nystrom method. The effective chunk size is
-        `chunk_size` x `num_threads`. This parameter should not be too small, e.g., <1000.
-    distance_metric
-        distance metric: "jaccard", "cosine".
-        When "cosine" is used, the matrix-free spectral embedding algorithm is used.
-    weighted_by_sd
-        Whether to weight the result eigenvectors by the square root of eigenvalues.
-        This parameter is turned on by default. When it is turned on, mannully selecting
-        the number of components is usually not necessary.
-    feature_weights
-        Feature weights used in the distance metric. If None, the inverse document
-        frequency (IDF) is used.
-    inplace
-        Whether to store the result in the anndata object.
-    num_threads
-        Number of threads to use in the Nystrom method.
+    adata : AnnData | AnnDataSet
+        Annotated data object with a cell-by-feature count matrix in `.X`.
+    n_comps : int
+        Maximum number of spectral dimensions to compute.
+    features : str | np.ndarray | None
+        Feature selector. If a string, use `adata.var[features]` as a Boolean
+        mask. If an array, use it directly. If None, use all features.
+    random_state : int
+        Seed for random sampling and eigensolver initialization.
+    sample_size : int | float | None
+        Number or fraction of cells to sample for the Nystrom approximation. If
+        None, use all cells.
+    sample_method : {"random", "degree"}
+        Sampling method for the matrix-free Nystrom approximation.
+    chunk_size : int
+        Number of cells per chunk in Nystrom extension. The effective work batch
+        is approximately `chunk_size * num_threads`.
+    distance_metric : {"jaccard", "cosine"}
+        Similarity metric used to construct the cell graph.
+    weighted_by_sd : bool
+        If True, multiply eigenvectors by the square root of their eigenvalues.
+    feature_weights : list[float] | None
+        Per-feature weights for similarity computation. If None, use inverse
+        document frequency weights where required.
+    inplace : bool
+        If True, write results to `adata`; if False, return them.
+    num_threads : int
+        Number of threads used by the Nystrom implementation.
 
     Returns
     -------
     tuple[np.ndarray, np.ndarray] | None
-        if `inplace=True` it stores Spectral embedding of data in
-        `adata.obsm["X_spectral"]` and `adata.uns["spectral_eigenvalue"]`.
-        Otherwise, it returns the result as numpy arrays.
+        If `inplace=True`, stores eigenvectors in `adata.obsm["X_spectral"]`
+        and eigenvalues in `adata.uns["spectral_eigenvalue"]`, then returns
+        None. If `inplace=False`, returns `(eigenvalues, eigenvectors)`.
 
     See Also
     --------
     multi_spectral
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> adata = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> snap.tl.spectral(adata, features=None, n_comps=30)
+    >>> adata.obsm["X_spectral"].shape[0] == adata.n_obs
+    True
     """
     np.random.seed(random_state)
 
@@ -396,36 +429,53 @@ def multi_spectral(
     weighted_by_sd: bool = True,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Compute Laplacian Eigenmaps simultaneously on multiple modalities, with linear
-    space and time complexity.
+    Compute one spectral embedding from multiple modalities.
 
-    This is similar to :func:`~snapatac2.tl.spectral`, but it can work on multiple modalities.
+    Use this function to integrate multiple AnnData or AnnDataSet objects that
+    describe the same cells with different feature spaces. The returned embedding
+    combines modality-specific graph structure before downstream clustering.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass modalities with different cell order; rows are assumed to refer
+      to the same cells in the same order.
+    - Do NOT pass `features="selected"` unless each modality has
+      `adata.var["selected"]`.
 
     Parameters
     ----------
-    adatas
-        A list of AnnData objects, representing single-cell data from different modalities.
-    n_comps
-        Number of dimensions to keep.
-        See :func:`~snapatac2.tl.spectral` for details.
-    features
-        Boolean index mask. True means that the feature is kept. False means the feature is removed.
-    weights
-        Weights for each modality. If None, all modalities are weighted equally.
-    random_state
-        Seed of the random state generator
-    weighted_by_sd
-        Whether to weight the result eigenvectors by the square root of eigenvalues.
-        See :func:`~snapatac2.tl.spectral` for details.
+    adatas : list[AnnData] | list[AnnDataSet]
+        Modalities to embed. Each object must have the same observations in the
+        same order.
+    n_comps : int
+        Maximum number of spectral dimensions to compute.
+    features : str | list[str] | list[np.ndarray] | None
+        Feature selectors for each modality. A single string or None is reused
+        for every modality.
+    weights : list[float] | None
+        Modality weights. If None, weight all modalities equally.
+    random_state : int
+        Seed for random initialization.
+    weighted_by_sd : bool
+        If True, multiply eigenvectors by the square root of their eigenvalues.
 
     Returns
     -------
     tuple[np.ndarray, np.ndarray]
-        Return the eigenvalues and eigenvectors of the Laplacian matrix.
+        Eigenvalues and integrated eigenvectors.
 
     See Also
     --------
     spectral
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> atac = snap.datasets.pbmc5k(type="annotated_h5ad")
+    >>> gene = snap.pp.make_gene_matrix(atac, snap.genome.hg38)
+    >>> evals, evecs = snap.tl.multi_spectral([atac, gene], features=None)
+    >>> evecs.shape[0] == atac.n_obs
+    True
     """
     np.random.seed(random_state)
 

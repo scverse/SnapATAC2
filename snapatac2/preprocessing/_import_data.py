@@ -29,9 +29,28 @@ def make_fragment_file(
     tempdir: Path | None = None,
 ) -> dict[str, float]:
     """
-    Convert a BAM file to a fragment file.
+    Convert a BAM file into a sorted fragment file.
 
-    Convert a BAM file to a fragment file by performing the following steps:
+    Use this function to create a fragment file from paired-end or single-end BAM
+    alignments before importing the data with `import_fragments`. The conversion
+    filters low-quality records, extracts cell barcodes and optional UMIs,
+    removes duplicates within each barcode, applies Tn5 insertion-site shifts for
+    paired-end reads, and writes fragments in barcode-sorted order.
+
+    The BAM file does not need to be pre-sorted or pre-filtered.
+
+    Anti-Patterns
+    -------------
+    - Do NOT set both `barcode_tag` and `barcode_regex`; choose exactly one
+      barcode source.
+    - Do NOT use this function for Cell Ranger ATAC BAM files unless
+      `source="10x"` is appropriate; Cell Ranger ATAC BAM headers can be
+      malformed, and the Cell Ranger fragment file is usually the safer input.
+    - Do NOT place `tempdir` on a small filesystem for large BAM files; sorting
+      can create large temporary files.
+
+    Processing Steps
+    ----------------
 
     1. Filtering: remove reads that are unmapped, not primary alignment, mapq < 30,
        fails platform/vendor quality checks, or optical duplicate.
@@ -40,30 +59,19 @@ def make_fragment_file(
        for each unique cell barcode.
     3. Output: Convert BAM records to fragments (if paired-end) or single-end reads.
 
-    The bam file needn't be sorted or filtered.
-
-    Note
-    ----
-    - When using `barcode_regex` or `umi_regex`, the regex must contain exactly one capturing group
-      (Parentheses group the regex between them) that matches the barcodes or UMIs.
-      Writting the correct regex is tricky. You can test your regex online at https://regex101.com/.
-      BAM files produced by the 10X Genomics Cell Ranger pipeline are not supported,
-      as they contain invalid BAM headers. Specifically, Cell Ranger ATAC <= 2.0 produces BAM
-      files with no @VN tag in the header, and Cell Ranger ATAC >= 2.1 produces BAM files
-      with invalid @VN tag in the header.
-      It is recommended to use the fragment files produced by Cell Ranger ATAC instead.
-    - This function generates large temporary files in `tempdir` during sorting.
-      For large files, it is recommended to set `tempdir` to a location with
-      sufficient space in order to avoid running out of disk space.
+    Notes
+    -----
+    When using `barcode_regex` or `umi_regex`, the regular expression must
+    contain exactly one capturing group that matches the barcode or UMI.
 
     Parameters
     ----------
     bam_file
-        File name of the BAM file.
+        Path to the input BAM file.
     output_file
-        File name of the output fragment file.
+        Path to the output fragment file.
     is_paired
-        Indicate whether the BAM file contain paired-end reads
+        Whether the BAM file contains paired-end reads.
     barcode_tag
         Extract barcodes from TAG fields of BAM records, e.g., `barcode_tag="CB"`.
     barcode_regex
@@ -107,7 +115,7 @@ def make_fragment_file(
     Returns
     -------
     dict[str, float]
-        A dictionary containing the following metrics:
+        Dictionary containing sequencing and mapping QC metrics, including:
 
         - "sequenced_reads": number of reads in the input BAM file.
         - "sequenced_read_pairs": number of read pairs in the input BAM file.
@@ -134,6 +142,19 @@ def make_fragment_file(
     import_fragments
     import_contacts
     import_values
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> bam_file = snap.datasets.pbmc500(type="bam")
+    >>> metrics = snap.pp.make_fragment_file(
+    ...     bam_file,
+    ...     "fragments.tsv.gz",
+    ...     barcode_tag="CB",
+    ...     source="10x",
+    ... )
+    >>> "sequenced_reads" in metrics
+    True
     """
     if barcode_tag is None and barcode_regex is None:
         raise ValueError("Either barcode_tag or barcode_regex must be set.")
@@ -164,7 +185,12 @@ def import_fragments(
     backend: Literal['hdf5'] = 'hdf5',
     n_jobs: int = 8,
 ) -> internal.AnnData:
-    """Import data from fragment files and compute basic QC metrics.
+    """Import fragment files and compute basic QC metrics.
+
+    Use this function to load single-cell ATAC fragments into an AnnData object
+    before constructing count matrices. The function stores fragments in `.obsm`,
+    records reference sequence sizes in `.uns`, and computes cell-level QC metrics
+    such as fragment counts, duplicate fraction, and mitochondrial fraction.
 
     A fragment refers to the sequence data originating from a distinct location
     in the genome. In single-ended sequencing, one read equates to a fragment.
@@ -195,8 +221,18 @@ def import_fragments(
     .. image:: /_static/images/func+import_data.svg
         :align: center
 
-    Note
-    ----
+    Anti-Patterns
+    -------------
+    - Do NOT run linear algebra directly on `.obsm['fragment_paired']` or
+      `.obsm['fragment_single']`; these matrices encode fragment positions and
+      lengths, not a standard feature-by-cell count matrix.
+    - Do NOT set `sorted_by_barcode=True` for unsorted fragment files; set it to
+      `False` so this function sorts them first.
+    - Do NOT omit the `if __name__ == "__main__"` guard in Python scripts when
+      importing a list of files with multiprocessing.
+
+    Notes
+    -----
     - This function accepts both single-end and paired-end reads. The argument `is_paired`
       specifies the type of reads in the fragment file.
     - When `file` is not `None`, this function uses constant memory regardless of
@@ -282,12 +318,14 @@ def import_fragments(
     Examples
     --------
     >>> import snapatac2 as snap
-    >>> data = snap.pp.import_fragments(snap.datasets.pbmc500(downsample=True), chrom_sizes=snap.genome.hg38, sorted_by_barcode=False)
-    >>> print(data)
-    AnnData object with n_obs × n_vars = 585 × 0
-        obs: 'n_fragment', 'frac_dup', 'frac_mito'
-        uns: 'reference_sequences'
-        obsm: 'fragment_paired'
+    >>> fragments = snap.datasets.pbmc500(downsample=True)
+    >>> data = snap.pp.import_fragments(
+    ...     fragments,
+    ...     chrom_sizes=snap.genome.hg38,
+    ...     sorted_by_barcode=False,
+    ... )
+    >>> {"n_fragment", "frac_dup", "frac_mito"}.issubset(data.obs.columns)
+    True
     """
     chrom_sizes = chrom_sizes.chrom_sizes if isinstance(chrom_sizes, Genome) else chrom_sizes
     if len(chrom_sizes) == 0:
@@ -337,12 +375,21 @@ def import_contacts(
     tempdir: Path | None = None,
     backend: Literal['hdf5'] = 'hdf5',
 ) -> internal.AnnData:
-    """Import chromatin contacts.
+    """Import chromatin contacts into an AnnData object.
+
+    Use this function to load single-cell chromatin-contact records and bin them
+    into fixed-width genomic intervals. The result can be kept in memory or
+    written to a backed h5ad file.
+
+    Anti-Patterns
+    -------------
+    - Do NOT set `sorted_by_barcode=True` for unsorted contact files; set it to
+      `False` so this function sorts them first.
 
     Parameters
     ----------
     contact_file
-        File name of the fragment file.
+        Path to the contact file.
     file
         File name of the output h5ad file used to store the result. If provided,
         result will be saved to a backed AnnData, otherwise an in-memory AnnData
@@ -351,10 +398,7 @@ def import_contacts(
         A Genome object or a dictionary containing chromosome sizes, for example,
         `{"chr1": 2393, "chr2": 2344, ...}`.
     sorted_by_barcode
-        Whether the fragment file has been sorted by cell barcodes.
-        If `sorted_by_barcode == True`, this function makes use of small fixed amout of 
-        memory. If `sorted_by_barcode == False` and `low_memory == False`,
-        all data will be kept in memory. See `low_memory` for more details.
+        Whether the contact file has been sorted by cell barcodes.
     bin_size
         The size of consecutive genomic regions used to record the counts.
     chunk_size
@@ -371,6 +415,19 @@ def import_contacts(
         An annotated data matrix of shape `n_obs` x `n_vars`. Rows correspond to
         cells and columns to regions. If `file=None`, an in-memory AnnData will be
         returned, otherwise a backed AnnData is returned.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> import tempfile
+    >>> import snapatac2 as snap
+    >>> tmp = tempfile.TemporaryDirectory()
+    >>> contact_file = Path(tmp.name) / "contacts.tsv"
+    >>> _ = contact_file.write_text("cell1\\tchr1\\t10\\tchr1\\t40\\t1\\n")
+    >>> data = snap.pp.import_contacts(contact_file, chrom_sizes={"chr1": 1000})
+    >>> data.n_obs
+    1
+    >>> tmp.cleanup()
     """
     chrom_sizes = chrom_sizes.chrom_sizes if isinstance(chrom_sizes, Genome) else chrom_sizes
     if len(chrom_sizes) == 0:
@@ -391,13 +448,21 @@ def import_values(
     chunk_size: int = 200,
     backend: Literal['hdf5'] = 'hdf5',
 ) -> internal.AnnData:
-    """Import values associated with base pairs, typically from experiments like
-    whole-genome bisulfite sequencing (WGBS).
+    """Import base-pair values into an AnnData object.
+
+    Use this function to load per-cell, base-resolution values from a directory
+    of input files, such as whole-genome bisulfite sequencing values, into an
+    AnnData object.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass an empty chromosome-size mapping; reference sequence sizes are
+      required to index genomic positions.
 
     Parameters
     ----------
     input_dir
-        Directory containing the input files. Each file corresponds to a single cell.
+        Directory containing input files, with one file per cell.
     chrom_sizes
         A Genome object or a dictionary containing chromosome sizes, for example,
         `{"chr1": 2393, "chr2": 2344, ...}`.
@@ -420,6 +485,19 @@ def import_values(
         An annotated data matrix of shape `n_obs` x `n_vars`. Rows correspond to
         cells and columns to regions. If `file=None`, an in-memory AnnData will be
         returned, otherwise a backed AnnData is returned.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> import tempfile
+    >>> import snapatac2 as snap
+    >>> tmp = tempfile.TemporaryDirectory()
+    >>> input_dir = Path(tmp.name)
+    >>> _ = (input_dir / "cell1.tsv").write_text("chrom\\tpos\\tmethyl\\tunmethyl\\nchr1\\t10\\t3\\t7\\n")
+    >>> data = snap.pp.import_values(input_dir, chrom_sizes={"chr1": 1000})
+    >>> data.n_obs
+    1
+    >>> tmp.cleanup()
     """
     chrom_sizes = chrom_sizes.chrom_sizes if isinstance(chrom_sizes, Genome) else chrom_sizes
     if len(chrom_sizes) == 0:

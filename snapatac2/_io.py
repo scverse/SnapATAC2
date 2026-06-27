@@ -10,29 +10,50 @@ def read_10x_mtx(
     file: Path | None = None,
     prefix: str | None = None,
 ) -> AnnData:
-    """Read 10x-Genomics-formatted mtx directory.
+    """Read a 10x Genomics MTX directory into an AnnData object.
+
+    Use this function to load a directory containing a matrix file, feature file,
+    and barcode file in the 10x MTX layout. Pass `file` to create a backed
+    AnnData object on disk instead of returning a fully in-memory object.
+
+    Anti-Patterns
+    -------------
+    - Do NOT pass the path to `matrix.mtx` directly; pass the directory that
+      contains the matrix, feature, and barcode files.
+    - Do NOT include multiple matching matrix, feature, or barcode files with the
+      same prefix in the directory; exactly one of each file type must match.
 
     Parameters
     ----------
-    path
-        Path to directory for `.mtx` and `.tsv` files. The directory should contain
-        three files:
+    path : pathlib.Path
+        Directory containing the 10x MTX files. The directory must contain one
+        matching file from each group:
 
-        1. count matrix: "matrix.mtx" or "matrix.mtx.gz".
-        2. features: "genes.tsv", or "genes.tsv.gz", or "features.tsv", or "features.tsv.gz".
-        3. barcodes: "barcodes.tsv", or "barcodes.tsv.gz".
-    file
-        File name of the ".h5ad" file used to save the AnnData object. If `None`,
-        an in-memory AnnData object is returned.
-    prefix
-        Any prefix before `matrix.mtx`, `genes.tsv` and `barcodes.tsv`. For instance,
-        if the files are named `patientA_matrix.mtx`, `patientA_genes.tsv` and
-        `patientA_barcodes.tsv`, then the prefix is `patientA_`.
+        1. Matrix: "matrix.mtx" or "matrix.mtx.gz".
+        2. Features: "genes.tsv", "genes.tsv.gz", "features.tsv", or
+           "features.tsv.gz".
+        3. Barcodes: "barcodes.tsv" or "barcodes.tsv.gz".
+    file : pathlib.Path or None, default: None
+        Output h5ad filename for a backed AnnData object. If None, return an
+        in-memory AnnData object.
+    prefix : str or None, default: None
+        Optional filename prefix before the matrix, feature, and barcode names.
+        For files named `patientA_matrix.mtx`, `patientA_genes.tsv`, and
+        `patientA_barcodes.tsv`, pass `prefix="patientA_"`.
 
     Returns
     -------
     AnnData
-        An AnnData object.
+        AnnData object with observations from the barcode file, variables from
+        the feature file, and `.X` containing the transposed sparse count matrix.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> import snapatac2 as snap
+    >>> adata = snap.read_10x_mtx(Path("filtered_feature_bc_matrix"))
+    >>> adata.n_obs >= 0
+    True
     """
     import pandas as pd
 

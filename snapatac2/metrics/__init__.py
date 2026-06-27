@@ -16,34 +16,45 @@ def tsse(
     inplace: bool = True,
     n_jobs: int = 8,
 ) -> np.ndarray | list[np.ndarray] | None:
-    """ Compute the TSS enrichment score (TSSe) for each cell.
+    """Compute transcription start site enrichment for each cell.
 
-    :func:`~snapatac2.pp.import_fragments` must be ran first in order to use this function.
+    Run this metric after :func:`~snapatac2.pp.import_fragments` has attached
+    fragment metadata to the AnnData object. With `inplace=True`, the function
+    writes cell-level scores to `adata.obs["tsse"]` and library-level summaries
+    to `adata.uns`.
+
+    Anti-Patterns
+    -------------
+    - Do NOT call this function on an AnnData object that lacks imported
+      fragments.
+    - Do NOT pass a genome object without an annotation file; `gene_anno` must
+      resolve to a GTF/GFF annotation.
 
     Parameters
     ----------
-    adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-        `adata` could also be a list of AnnData objects.
-        In this case, the function will be applied to each AnnData object in parallel.
-    gene_anno
-        A :class:`~snapatac2.Genome` object or a GTF/GFF file containing the gene annotation.
-    exclude_chroms
-        A list of chromosomes to exclude.
-    inplace
-        Whether to add the results to `adata.obs` or return it as a dictionary.
-    n_jobs
-        Number of jobs to run in parallel when `adata` is a list.
-        If `n_jobs=-1`, all CPUs will be used.
+    adata : snapatac2._snapatac2.AnnData or list[snapatac2._snapatac2.AnnData]
+        AnnData object, or a list of AnnData objects, with imported fragments.
+        When a list is provided, compute TSSe for each object in parallel.
+    gene_anno : snapatac2.genome.Genome or pathlib.Path
+        Genome object with an `annotation` path, or a GTF/GFF annotation file
+        path used to define transcription start sites.
+    exclude_chroms : list[str], str, or None, default: ["chrM", "M"]
+        Chromosome names to exclude when computing the TSS profile. Use None to
+        include all chromosomes.
+    inplace : bool, default: True
+        If True, store results in `adata.obs` and `adata.uns`. If False, return
+        the result dictionary instead.
+    n_jobs : int, default: 8
+        Number of jobs to run when `adata` is a list. If `n_jobs=-1`, use all
+        available CPUs.
 
     Returns
     -------
-    tuple[np.ndarray, tuple[float, float]] | list[tuple[np.ndarray, tuple[float, float]]] | None
-        If `inplace = True`, cell-level TSSe scores are computed and stored in `adata.obs['tsse']`.
-        Library-level TSSe scores are stored in `adata.uns['library_tsse']`.
-        Fraction of fragments overlapping TSS are stored in `adata.uns['frac_overlap_TSS']`.
-        If `inplace = False`, return a tuple containing all these values.
+    dict[str, object] or list[dict[str, object]] or None
+        If `inplace=True`, returns None after storing `tsse` in `adata.obs` and
+        `library_tsse`, `frac_overlap_TSS`, and `TSS_profile` in `adata.uns`. If
+        `inplace=False`, returns the same values in a dictionary, or a list of
+        dictionaries when `adata` is a list.
 
     Examples
     --------
@@ -89,33 +100,40 @@ def frip(
     inplace: bool = True,
     n_jobs: int = 8,
 ) -> dict[str, list[float]] | list[dict[str, list[float]]] | None:
-    """ Add fraction of reads in peaks (FRiP) to the AnnData object.
+    """Compute fraction of reads or insertions in selected regions.
 
-    :func:`~snapatac2.pp.import_fragments` must be ran first in order to use this function.
+    Run this metric after :func:`~snapatac2.pp.import_fragments` has attached
+    fragment metadata to the AnnData object. Use the keys of `regions` as output
+    column names; with `inplace=True`, each metric is written to `adata.obs`.
+
+    Anti-Patterns
+    -------------
+    - Do NOT call this function on an AnnData object that lacks imported
+      fragments.
+    - Do NOT reuse the same `regions` dictionary across calls if you need to
+      preserve original path values; this function converts path values to
+      region lists in place.
 
     Parameters
     ----------
-    adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-        `adata` could also be a list of AnnData objects.
-        In this case, the function will be applied to each AnnData object in parallel.
-    regions
-        A dictionary containing the peak sets to compute FRiP.
-        The keys are peak set names and the values are either a bed file name or a list of
-        strings representing genomic regions. For example,
-        `{"promoter_frac": "promoter.bed", "enhancer_frac": ["chr1:100-200", "chr2:300-400"]}`.
-    normalized
-        Whether to normalize the counts by the total number of fragments.
-        If False, the raw number of fragments in peaks will be returned.
-    count_as_insertion
-        Whether to count transposition events instead of fragments. Transposition
-        events are located at both ends of fragments.
-    inplace
-        Whether to add the results to `adata.obs` or return it as a dictionary.
-    n_jobs
-        Number of jobs to run in parallel when `adata` is a list.
-        If `n_jobs=-1`, all CPUs will be used.
+    adata : snapatac2._snapatac2.AnnData or list[snapatac2._snapatac2.AnnData]
+        AnnData object, or a list of AnnData objects, with imported fragments.
+        When a list is provided, compute FRiP for each object in parallel.
+    regions : dict[str, pathlib.Path or list[str]]
+        Mapping from output metric name to a BED file path or a list of genomic
+        intervals such as `"chr1:100-200"`.
+    normalized : bool, default: True
+        If True, return fractions normalized by the total number of fragments or
+        insertions. If False, return raw counts overlapping each region set.
+    count_as_insertion : bool, default: False
+        If True, count transposition insertions at fragment ends instead of whole
+        fragments.
+    inplace : bool, default: True
+        If True, store each result vector in `adata.obs` using the corresponding
+        `regions` key. If False, return the result dictionary.
+    n_jobs : int, default: 8
+        Number of jobs to run when `adata` is a list. If `n_jobs=-1`, use all
+        available CPUs.
 
     Returns
     -------
@@ -167,39 +185,57 @@ def frag_size_distr(
     inplace: bool = True,
     n_jobs: int = 8,
 ) -> np.ndarray | list[np.ndarray] | None:
-    """ Compute the fragment size distribution of the dataset. 
+    """Compute the dataset-level fragment size distribution.
 
-    This function computes the fragment size distribution of the dataset.
-    Note that it does not operate at the single-cell level.
-    The result is stored in a vector where each element represents the number of fragments
-    and the index represents the fragment length. The first posision of the vector is
-    reserved for fragments with size larger than the `max_recorded_size` parameter.
-    :func:`~snapatac2.pp.import_fragments` must be ran first in order to use this function.
+    Run this metric after :func:`~snapatac2.pp.import_fragments` has attached
+    fragment metadata to the AnnData object. The result is a vector where index
+    `i` counts fragments of length `i`, except index 0 counts fragments longer
+    than `max_recorded_size`. This metric summarizes the whole dataset rather
+    than individual cells.
+
+    Anti-Patterns
+    -------------
+    - Do NOT interpret the returned vector as cell-level values; it is one
+      distribution per AnnData object.
+    - Do NOT call this function on an AnnData object that lacks imported
+      fragments.
 
     Parameters
     ----------
-    adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-        `adata` could also be a list of AnnData objects.
-        In this case, the function will be applied to each AnnData object in parallel.
-    max_recorded_size
-        The maximum fragment size to record in the result.
-        Fragments with length larger than `max_recorded_size` will be recorded in the first
-        position of the result vector.
-    add_key
-        Key used to store the result in `adata.uns`.
-    inplace
-        Whether to add the results to `adata.uns` or return it.
-    n_jobs
-        Number of jobs to run in parallel when `adata` is a list.
-        If `n_jobs=-1`, all CPUs will be used.
+    adata : snapatac2._snapatac2.AnnData or list[snapatac2._snapatac2.AnnData]
+        AnnData object, or a list of AnnData objects, with imported fragments.
+        When a list is provided, compute one distribution for each object in
+        parallel.
+    max_recorded_size : int, default: 1000
+        Largest fragment length with its own output bin. Fragments longer than
+        this value are counted at index 0.
+    add_key : str, default: "frag_size_distr"
+        Key used to store the distribution in `adata.uns` when `inplace=True`.
+    inplace : bool, default: True
+        If True, store the distribution in `adata.uns[add_key]`. If False,
+        return the distribution.
+    n_jobs : int, default: 8
+        Number of jobs to run when `adata` is a list. If `n_jobs=-1`, use all
+        available CPUs.
 
     Returns
     -------
     np.ndarray | list[np.ndarray] | None
-        If `inplace = True`, directly adds the results to `adata.uns['`add_key`']`.
-        Otherwise return the results.
+        If `inplace=True`, returns None after storing the distribution in
+        `adata.uns[add_key]`. If `inplace=False`, returns the distribution, or a
+        list of distributions when `adata` is a list.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> data = snap.pp.import_fragments(
+    ...     snap.datasets.pbmc500(downsample=True),
+    ...     chrom_sizes=snap.genome.hg38,
+    ...     sorted_by_barcode=False,
+    ... )
+    >>> snap.metrics.frag_size_distr(data)
+    >>> data.uns["frag_size_distr"].shape[0]
+    1001
     """
     if isinstance(adata, list):
         return snapatac2._utils.anndata_par(
@@ -220,31 +256,49 @@ def summary_by_chrom(
     mode: Literal['sum', 'mean', 'count'] = 'count',
     n_jobs: int = 8,
 ) -> dict[str, np.ndarray]:
-    """ Compute the cell level summary statistics by chromosome.
+    """Compute per-cell summary statistics for each chromosome.
 
-    :func:`~snapatac2.pp.import_fragments` must be ran first in order to use this function.
+    Run this metric after :func:`~snapatac2.pp.import_fragments` has attached
+    fragment metadata to the AnnData object. The returned dictionary contains one
+    vector per chromosome, with one value per cell.
+
+    Anti-Patterns
+    -------------
+    - Do NOT call this function on an AnnData object that lacks imported
+      fragments.
+    - Do NOT pass this result directly as a matrix without aligning chromosome
+      keys; dictionary order is not a biological ordering guarantee.
 
     Parameters
     ----------
-    adata
-        The (annotated) data matrix of shape `n_obs` x `n_vars`.
-        Rows correspond to cells and columns to regions.
-        `adata` could also be a list of AnnData objects.
-        In this case, the function will be applied to each AnnData object in parallel.
-    mode
-        The summary statistics to compute. It can be one of the following:
-        - 'sum': Sum of the values.
-        - 'mean': Mean of the values.
-        - 'count': Count of the values.
-    n_jobs
-        Number of jobs to run in parallel when `adata` is a list.
-        If `n_jobs=-1`, all CPUs will be used.
+    adata : snapatac2._snapatac2.AnnData or list[snapatac2._snapatac2.AnnData]
+        AnnData object, or a list of AnnData objects, with imported fragments.
+        When a list is provided, compute chromosome summaries for each object in
+        parallel.
+    mode : {"sum", "mean", "count"}, default: "count"
+        Statistic to compute per chromosome and per cell. Use "sum" for summed
+        values, "mean" for mean values, or "count" for counts.
+    n_jobs : int, default: 8
+        Number of jobs to run when `adata` is a list. If `n_jobs=-1`, use all
+        available CPUs.
 
     Returns
     -------
     dict[str, np.ndarray]
-        A dictionary containing the summary statistics for each chromosome.
-        The keys are chromosome names and the values are the summary statistics.
+        Mapping from chromosome name to a one-dimensional array of per-cell
+        summary values. When `adata` is a list, returns a list of such mappings.
+
+    Examples
+    --------
+    >>> import snapatac2 as snap
+    >>> data = snap.pp.import_fragments(
+    ...     snap.datasets.pbmc500(downsample=True),
+    ...     chrom_sizes=snap.genome.hg38,
+    ...     sorted_by_barcode=False,
+    ... )
+    >>> chrom_counts = snap.metrics.summary_by_chrom(data, mode="count")
+    >>> chrom_counts["chr1"].shape[0] == data.n_obs
+    True
     """
     if isinstance(adata, list):
         return snapatac2._utils.anndata_par(
