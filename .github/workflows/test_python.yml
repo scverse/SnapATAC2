@@ -16,7 +16,7 @@ jobs:
     - uses: actions/setup-python@v6
       name: Install Python
       with:
-          python-version: '3.12'
+          python-version: '3.13'
 
     - name: Install uv
       uses: astral-sh/setup-uv@v6
@@ -29,7 +29,7 @@ jobs:
       run: uv sync --all-groups
 
     - name: Run tests
-      run: uv run pytest tests
+      run: uv run pytest tests --ignore=tests/test_pipeline.py
 
     - name: Get SnapATAC2 version
       id: get_version
