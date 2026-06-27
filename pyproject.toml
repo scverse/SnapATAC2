@@ -49,6 +49,7 @@ manifest-path = "Cargo.toml"
 module-name = "snapatac2._snapatac2"
 include = [
   { path = "snapatac2/llms.txt", format = ["sdist", "wheel"] },
+  { path = "snapatac2/examples/**/*", format = ["sdist", "wheel"] },
 ]
 
 [project.urls]
@@ -89,5 +90,5 @@ docs = [
   "myst-parser >4.0.0,<5",
   "markupsafe >3.0.0,<4",
   "sphinx-plotly-directive",
-  "auto-api @ git+https://github.com/regulatory-genomics/auto-api",
+  "auto-api @ git+https://github.com/regulatory-genomics/auto-api@3ce76f37730e63d0259edf4e4f968d130f741385",
 ]

@@ -15,3 +15,96 @@ SnapATAC2 is a flexible, versatile, and scalable single-cell omics analysis fram
 Below is a list of available functions in SnapATAC2. For detailed API usage, please use `help(function_name)` to retrieve the docstring.
 
 [PLACE HOLDER]
+
+## Tutorials
+
+### Standard PBMC scATAC-seq Pipeline
+
+Use this workflow to analyze the 10x Genomics 5k PBMC scATAC-seq fragment dataset with SnapATAC2. The pipeline imports fragments, computes QC metrics, filters cells, creates a tile matrix, selects features, removes doublets, computes embeddings, clusters cells, creates a gene activity matrix, and saves outputs.
+
+#### Prerequisites
+
+- Install SnapATAC2 and optional plotting/analysis dependencies used in the workflow.
+- Use backed mode (`file="pbmc.h5ad"`) for large datasets or memory-constrained environments.
+- Close backed AnnData objects before the Python process exits to avoid HDF5 file corruption.
+
+#### Complete Script
+
+```python
+import snapatac2 as snap
+
+# 1. Download the 10x PBMC fragment file.
+fragment_file = snap.datasets.pbmc5k()
+
+# 2. Import fragments into a backed AnnData object and compute basic QC metrics.
+data = snap.pp.import_fragments(
+    fragment_file,
+    chrom_sizes=snap.genome.hg38,
+    file="pbmc.h5ad",
+    sorted_by_barcode=False,
+)
+
+# 3. Inspect fragment-size distribution and compute TSS enrichment.
+snap.pl.frag_size_distr(data, interactive=False)
+snap.metrics.tsse(data, snap.genome.hg38)
+snap.pl.tsse(data, interactive=False, show=False, out_file="tsse.png")
+
+# 4. Keep high-quality cells.
+snap.pp.filter_cells(
+    data,
+    min_counts=5000,
+    min_tsse=10,
+    max_counts=100000,
+)
+
+# 5. Generate a 500-bp genome-wide tile matrix in data.X.
+snap.pp.add_tile_matrix(data)
+
+# 6. Select accessible features for downstream modeling.
+snap.pp.select_features(data, n_features=250000)
+
+# 7. Detect and remove doublets.
+snap.pp.scrublet(data)
+snap.pp.filter_doublets(data)
+
+# 8. Compute dimensionality reduction and UMAP embedding.
+snap.tl.spectral(data)
+snap.tl.umap(data)
+
+# 9. Build the KNN graph and cluster cells with Leiden.
+snap.pp.knn(data)
+snap.tl.leiden(data)
+snap.pl.umap(data, color="leiden", interactive=False, show=False, out_file="umap.png")
+
+# 10. Create an in-memory gene activity matrix for marker-gene annotation.
+gene_matrix = snap.pp.make_gene_matrix(data, snap.genome.hg38)
+
+# 11. Close or save outputs.
+gene_matrix.write("pbmc5k_gene_mat.h5ad", compression="gzip")
+data.close()
+```
+
+#### Workflow Notes
+
+- `snap.pp.import_fragments(..., file="pbmc.h5ad")` creates a backed AnnData object. This streams data to disk and is preferred for large fragment files.
+- `snap.metrics.tsse` adds per-cell TSS enrichment to `data.obs["tsse"]` and library-level TSS metrics to `data.uns`.
+- `snap.pp.filter_cells` subsets the AnnData object in place by default. In this tutorial, cells are retained when they have at least 5000 fragments, TSS enrichment of at least 10, and at most 100000 fragments. The best threshold varies depends on the protocol and sample.
+- `snap.pp.add_tile_matrix` writes a cell-by-bin count matrix to `data.X`.
+- `snap.pp.select_features` stores the feature mask in `data.var["selected"]`; it does not subset the matrix directly.
+- `snap.pp.scrublet` stores doublet scores and probabilities in `data.obs`; `snap.pp.filter_doublets` removes predicted doublets.
+- `snap.tl.spectral` writes the spectral embedding to `data.obsm["X_spectral"]`; `snap.tl.umap` writes UMAP coordinates to `data.obsm["X_umap"]`.
+- `snap.tl.leiden` stores cluster labels in `data.obs["leiden"]`.
+- `snap.pp.make_gene_matrix` returns a new AnnData object with cells as observations and genes as variables.
+
+#### Key Outputs
+
+- `pbmc.h5ad`: backed AnnData file containing imported fragments, QC metrics, tile matrix, selected features, doublet annotations, embeddings, graph, and clusters.
+- `pbmc5k_gene_mat.h5ad`: Gene activity matrix.
+- `data.obs`: expected to contain fields such as `n_fragment`, `frac_dup`, `frac_mito`, `tsse`, `doublet_probability`, `doublet_score`, and `leiden`.
+- `data.var["selected"]`: boolean mask for selected genomic bins.
+- `data.obsm["X_spectral"]` and `data.obsm["X_umap"]`: dimensionality-reduction results.
+
+### Other Tutorials
+
+- "examples/atlas.md": Atlas-Scale Human Chromatin Accessibility Analysis
+- "examples/modality.md": Joint Embedding of PBMC Multiome RNA and ATAC Data
