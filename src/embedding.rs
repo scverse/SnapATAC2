@@ -2,10 +2,7 @@ use crate::utils::AnnDataLike;
 use snapatac2_core::utils::PrefetchIterator;
 
 use anndata::{
-    data::{
-        array::utils::to_csr_data, ArrayConvert, DynCsrMatrix, SelectInfoElem,
-        SelectInfoElemBounds, Stackable,
-    },
+    data::{array::utils::to_csr_data, ArrayConvert, DynCsrMatrix, SelectInfoElem, Stackable},
     AnnDataOp, ArrayData, ArrayElemOp, Backend, Selectable,
 };
 use anndata_hdf5::H5;
@@ -265,7 +262,12 @@ impl Nystrom {
         })
     }
 
-    fn par_transform(&self, mut mat: CsrMatrix<f64>, scale_factor: usize, num_threads: usize) -> Vec<DMatrix<f64>> {
+    fn par_transform(
+        &self,
+        mut mat: CsrMatrix<f64>,
+        scale_factor: usize,
+        num_threads: usize,
+    ) -> Vec<DMatrix<f64>> {
         let scale_factor = scale_factor as f64 / mat.nrows() as f64;
         // feature weighting and L2 norm normalization.
         normalize(&mut mat, &self.feature_weights);
@@ -439,45 +441,6 @@ fn spmm_dense(i: usize, j: usize, mat: &CsrMatrix<f64>, dense: &DMatrix<f64>) ->
         }
     }
     result
-}
-
-fn compute_degrees<A: AnnDataOp>(
-    adata: &A,
-    selected_features: &SelectInfoElem,
-    feature_weights: &[f64],
-) -> Vec<f64> {
-    let n = SelectInfoElemBounds::new(selected_features, adata.n_vars()).len();
-    let mut col_sum = vec![0.0; n];
-
-    // First pass to compute the sum of each column.
-    adata.x().iter(5000).for_each(|x: (CsrMatrix<f64>, _, _)| {
-        let mut mat = x.0.select_axis(1, selected_features);
-        normalize(&mut mat, feature_weights);
-        mat.row_iter().for_each(|row| {
-            row.col_indices()
-                .iter()
-                .zip(row.values().iter())
-                .for_each(|(i, x)| col_sum[*i] += x);
-        });
-    });
-    let col_sum = DVector::from(col_sum);
-
-    // Second pass to compute the degree.
-    adata
-        .x()
-        .iter(5000)
-        .flat_map(|x: (CsrMatrix<f64>, _, _)| {
-            let mut mat = x.0.select_axis(1, selected_features);
-            normalize(&mut mat, feature_weights);
-            let v = &mat * &col_sum;
-            v.into_iter().map(|x| *x - 1.0).collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>()
-}
-
-fn compute_probs(degrees: &[f64]) -> Vec<f64> {
-    let s: f64 = degrees.iter().map(|x| x.recip()).sum();
-    degrees.iter().map(|x| x.recip() / s).collect()
 }
 
 fn hstack(m1: CsrMatrix<f64>, m2: CsrMatrix<f64>) -> CsrMatrix<f64> {
