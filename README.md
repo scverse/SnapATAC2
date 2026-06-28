@@ -19,12 +19,26 @@ SnapATAC2 is a flexible, versatile, and scalable single-cell omics analysis fram
 - Seamless integration with other single-cell analysis packages such as Scanpy.
 - Implementation of fully backed AnnData.
 
+Using AI Agents with SnapATAC2
+------------------------------
+
+SnapATAC2 (v2.10.0+) is designed to be AI-friendly. We include an `llms.txt` file at the root of our package containing our API reference and core tutorials. 
+
+To get the most accurate code from your favorite AI agent, copy and paste the following prompt template:
+
+> I need to use the **snapatac2** python package to **[describe your goal, e.g., process a batch of fragment files and identify cell clusters]**.
+>
+> Before writing any code, please read the `llms.txt` file at the root of this package. 
+>
+> 1. Review the **tutorials** to understand the standard workflow and best practices for this type of analysis.
+> 2. Cross-reference the **API reference** to ensure you use the exact function names, class structures, and keyword arguments. Please do not hallucinate methods.
+>
+> Once you have reviewed both, generate the Python script.
+
 Documentation
 -------------
 
-- **Full Documentation**: https://scverse.org/SnapATAC2/
-- **Installation instructions**: https://scverse.org/SnapATAC2/install.html
-- **Tutorial/Demo**: https://scverse.org/SnapATAC2/tutorials/index.html
+- **Documentation**: https://scverse.org/SnapATAC2/
 
 How to cite
 -----------

@@ -2,6 +2,10 @@
 
 ## Nightly (unreleased)
 
+### Features:
+
+  - Add "llms.txt" to the package installation directory.
+
 ## Release 2.9.0 (released March 13, 2026)
 
 ### Features:
