@@ -28,7 +28,7 @@ To get the most accurate code from your favorite AI agent, copy and paste the fo
 
 > I need to use the **snapatac2** python package to **[describe your goal, e.g., process a batch of fragment files and identify cell clusters]**.
 >
-> Before writing any code, please read the `llms.txt` file at the root of this package. 
+> Before writing any code, please read the `llms.txt` file at the installation root of the snapatac2 package. 
 >
 > 1. Review the **tutorials** to understand the standard workflow and best practices for this type of analysis.
 > 2. Cross-reference the **API reference** to ensure you use the exact function names, class structures, and keyword arguments. Please do not hallucinate methods.

@@ -12,7 +12,7 @@ SnapATAC2 is a flexible, versatile, and scalable single-cell omics analysis fram
 
 ## API Reference
 
-Below is a list of available functions in SnapATAC2. For detailed API usage, please use `help(function_name)` to retrieve the docstring.
+Below is a list of available functions in SnapATAC2. For detailed API usage, please use python function `help(function_name)` to retrieve the docstring.
 
 [PLACE HOLDER]
 
@@ -37,6 +37,8 @@ import snapatac2 as snap
 fragment_file = snap.datasets.pbmc5k()
 
 # 2. Import fragments into a backed AnnData object and compute basic QC metrics.
+# Use `sorted_by_barcode=True` if fragment file is sorted by barcode names.
+# Cellranger does not sort barcode names so I set to `False` here.
 data = snap.pp.import_fragments(
     fragment_file,
     chrom_sizes=snap.genome.hg38,

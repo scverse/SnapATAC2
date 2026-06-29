@@ -7,9 +7,7 @@ cd "$REPO_ROOT"
 TMP_LLMS="$(mktemp -t llms.XXXXXX.txt)"
 trap 'rm -f "$TMP_LLMS"' EXIT
 
-uv run --group docs python scripts/generate_llms_txt.py --output "$TMP_LLMS"
-
-cp "$TMP_LLMS" "$REPO_ROOT/snapatac2/llms.txt"
+uv run --group docs python scripts/generate_llms_txt.py --output "$REPO_ROOT/snapatac2/llms.txt"
 
 maturin "$@"
 BUILD_STATUS=$?
