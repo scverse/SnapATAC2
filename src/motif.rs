@@ -224,8 +224,10 @@ impl PyDNAMotifScanner {
 
     /// Find motif occurrences in the given sequence above the specified p-value threshold.
     ///
-    /// Use this method when the positions and p-values of forward-strand motif
-    /// hits are needed. This method does not scan the reverse complement.
+    /// Use this method when the positions and scores of forward-strand motif
+    /// hits are needed. Set `report_pvalue=True` to also report log10 p-values
+    /// estimated from the scanner's score CDF. This method does not scan the
+    /// reverse complement.
     ///
     /// Anti-Patterns
     /// -------------
@@ -239,19 +241,30 @@ impl PyDNAMotifScanner {
     ///     DNA sequence to scan.
     /// pvalue : float
     ///     P-value threshold for reporting motif occurrences. Default is 1e-5.
+    /// report_pvalue : bool
+    ///     Whether to report per-hit log10 p-values. Default is False.
     ///
     /// Returns
     /// -------
-    /// list[tuple[int, float]]
-    ///     A list of tuples where each tuple contains the position of the motif occurrence
-    ///     and the corresponding p-value.
+    /// list[tuple[int, float, float | None]]
+    ///     A list of tuples where each tuple contains the position of the motif
+    ///     occurrence, the natural-log likelihood-ratio score, and optionally
+    ///     the log10 p-value.
     ///
     /// Examples
     /// --------
-    /// >>> hits = scanner.find("ACGTACGT", pvalue=1e-5)
-    #[pyo3(signature = (seq, pvalue=1e-5))]
-    fn find(&self, seq: &str, pvalue: f64) -> Vec<(usize, f64)> {
-        self.0.find(seq.as_bytes(), pvalue).collect()
+    /// >>> hits = scanner.find("ACGTACGT", pvalue=1e-5, report_pvalue=True)
+    #[pyo3(signature = (seq, pvalue=1e-5, report_pvalue=false))]
+    fn find(
+        &self,
+        seq: &str,
+        pvalue: f64,
+        report_pvalue: bool,
+    ) -> Vec<(usize, f64, Option<f64>)> {
+        self.0
+            .find(seq.as_bytes(), pvalue, report_pvalue)
+            .map(|x| (x.position, x.score, x.log10_p_value))
+            .collect()
     }
 
     /// Check if the motif exists in the given sequence above the specified p-value threshold.
@@ -283,11 +296,11 @@ impl PyDNAMotifScanner {
     /// >>> scanner.exist("ACGTACGT", pvalue=1e-5, rc=True)
     #[pyo3(signature = (seq, pvalue=1e-5, rc=true))]
     fn exist(&self, seq: &str, pvalue: f64, rc: bool) -> bool {
-        self.0.find(seq.as_bytes(), pvalue).next().is_some()
+        self.0.find(seq.as_bytes(), pvalue, false).next().is_some()
             || (rc
                 && self
                     .0
-                    .find(rev_compl(seq).as_bytes(), pvalue)
+                    .find(rev_compl(seq).as_bytes(), pvalue, false)
                     .next()
                     .is_some())
     }

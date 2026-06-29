@@ -1,6 +1,12 @@
 use itertools::Itertools;
 use std::{io::{Error, ErrorKind}, str::FromStr, default::Default};
 
+/// Background nucleotide probabilities in A/C/G/T order.
+///
+/// These probabilities define the null model used by motif scanners. Match
+/// scores are computed as natural-log likelihood ratios against this
+/// background, i.e. each aligned base contributes `ln(P_motif(base) /
+/// P_background(base))`.
 #[derive(Debug, Clone)]
 pub struct BackgroundProb(pub [f64; 4]);
 
@@ -10,6 +16,12 @@ impl Default for BackgroundProb {
     }
 }
 
+/// A DNA motif represented by position-specific A/C/G/T probabilities.
+///
+/// The rows of `probability` are expected to be ordered as A, C, G, T. When a
+/// motif is converted to a [`DNAMotifScanner`], pseudocounts are added to zero
+/// probabilities and rows are normalized before constructing the score
+/// distribution.
 #[derive(Debug, Clone)]
 pub struct DNAMotif {
     pub id: String,
@@ -56,6 +68,12 @@ impl DNAMotif {
         }).sum()
     }
 
+    /// Create a scanner using the supplied background probabilities.
+    ///
+    /// The scanner reports motif hit scores on the natural-log likelihood-ratio
+    /// scale, not p-values. The p-value supplied to [`DNAMotifScanner::find`] is
+    /// used only to derive the minimum score threshold from the scanner's score
+    /// distribution under the background model.
     pub fn to_scanner(mut self, bg: BackgroundProb) -> DNAMotifScanner {
         self.add_pseudocount(0.0001);
         let cdf = ScoreCDF::new(&self, &bg);
@@ -93,6 +111,7 @@ impl DNAMotif {
     }
 
     // This function does not do bound checks on seq.
+    // Returned scores are natural-log likelihood ratios, not p-values.
     fn look_ahead_search(
         &self,
         bg: &BackgroundProb,
@@ -127,6 +146,18 @@ impl DNAMotif {
     }
 }
 
+/// Scanner for finding motif hits in DNA sequences.
+///
+/// Hits are filtered by a p-value threshold but reported as `(position, score)`.
+/// The reported `score` is the natural-log likelihood ratio of the aligned
+/// sequence window under the motif model versus the background model:
+///
+/// `sum_i ln(P_motif_i(base_i) / P_background(base_i))`
+///
+/// It is not a p-value and it is not a log-transformed p-value. The p-value
+/// argument to [`find`](DNAMotifScanner::find) controls the minimum score by
+/// converting the upper-tail probability into a score threshold through the
+/// precomputed score CDF.
 #[derive(Debug, Clone)]
 pub struct DNAMotifScanner {
     pub motif: DNAMotif,
@@ -134,34 +165,67 @@ pub struct DNAMotifScanner {
     background: BackgroundProb,
 }
 
+/// A motif scan hit.
+///
+/// `position` is the zero-based start position of the hit in the scanned
+/// sequence. `score` is the natural-log likelihood-ratio motif score. When
+/// requested by [`DNAMotifScanner::find`], `log10_p_value` contains the
+/// upper-tail p-value estimated from the scanner's score CDF on a log10 scale.
+/// Otherwise it is `None`.
+#[derive(Debug, Clone)]
+pub struct MotifScanResult {
+    pub position: usize,
+    pub score: f64,
+    pub log10_p_value: Option<f64>,
+}
+
 impl DNAMotifScanner {
+    /// Find forward-strand motif hits in `seq` at or above the p-value cutoff.
+    ///
+    /// The `pvalue` argument is interpreted as an upper-tail probability under
+    /// the scanner's background model. Internally it is converted to a score
+    /// cutoff with `cdf.inverse(1 - pvalue)`, and only windows with scores at or
+    /// above that cutoff are returned.
+    ///
+    /// Returned items contain the zero-based position in `seq`, the natural-log
+    /// likelihood-ratio motif match score, and an optional log10 p-value. The
+    /// score is not a p-value and is not on a log p-value scale.
     pub fn find<'a>(
         &'a self,
         seq: &'a [u8],
         pvalue: f64,
+        report_pvalue: bool,
     ) -> MotifSites<'a>
     {
         let thres = self.cdf.prob_inverse(1.0 - pvalue);
         MotifSites {
             motif: &self.motif,
+            cdf: &self.cdf,
             sigma: self.motif.optimal_scores_suffix(&self.background),
             background: &self.background,
             seq: seq,
             cur_pos: 0,
             thres,
+            report_pvalue,
         }
     }
 }
 
+/// Approximate CDF of motif match scores under the background model.
+///
+/// Scores in this CDF use the same natural-log likelihood-ratio scale returned
+/// by [`DNAMotifScanner::find`]. The CDF maps score thresholds to cumulative
+/// background probability `P(score <= threshold)`.
 #[derive(Debug, Clone)]
 struct ScoreCDF(Vec<(f64, f64)>);
 
 impl ScoreCDF {
-    /// Approximate the cdf of motif matching scores using dynamic programming.
-    /// Algorithm:
-    /// Scan the PWM from left to right. For each position $i$, compute a score
-    /// density function $s_i$ such that $s_i(x)$ is the total number of sequences
-    /// with score $x$.
+    /// Approximate the CDF of motif matching scores using dynamic programming.
+    ///
+    /// The score for a sequence window is a natural-log likelihood ratio against
+    /// the background model. For each motif position, the possible base scores
+    /// are `ln(P_motif(base) / P_background(base))`; dynamic programming then
+    /// accumulates the background probability mass for binned total scores.
     fn new(motif: &DNAMotif, bg: &BackgroundProb) -> Self {
         struct ScoreGetter {
             lowest: f64,
@@ -217,6 +281,10 @@ impl ScoreCDF {
         ScoreCDF(cdf)
     }
 
+    /// Return the score threshold corresponding to cumulative probability `p`.
+    ///
+    /// Callers that want an upper-tail p-value cutoff should pass `1 - pvalue`.
+    /// The returned value is a natural-log likelihood-ratio score threshold.
     fn prob_inverse(&self, p: f64) -> f64 {
         if p > 1.0 || p < 0.0 {
             panic!("p must be in [0,1]");
@@ -241,20 +309,56 @@ impl ScoreCDF {
             w1 * ix_a + w2 * ix_b
         }
     }
+
+    /// Return `log10(P(score >= threshold))` estimated from the score CDF.
+    fn log10_upper_tail_prob(&self, threshold: f64) -> f64 {
+        let cdf = &self.0;
+        let n = cdf.len();
+        if n == 0 {
+            panic!("empty score CDF");
+        }
+        let upper_tail = match cdf.binary_search_by(|x| x.0.partial_cmp(&threshold).unwrap()) {
+            Ok(i) => 1.0 - if i == 0 { 0.0 } else { cdf[i-1].1 },
+            Err(0) => 1.0,
+            Err(i) if i >= n => {
+                if n == 1 { 1.0 } else { 1.0 - cdf[n-2].1 }
+            },
+            Err(i) => {
+                let (score_a, p_a) = cdf[i-1];
+                let (score_b, p_b) = cdf[i];
+                let w1 = (score_b - threshold) / (score_b - score_a);
+                let w2 = (threshold - score_a) / (score_b - score_a);
+                1.0 - (w1 * p_a + w2 * p_b)
+            },
+        };
+        let upper_tail = upper_tail.clamp(0.0, 1.0);
+        if upper_tail == 0.0 {
+            f64::NEG_INFINITY
+        } else {
+            upper_tail.log10()
+        }
+    }
 }
 
 pub struct MotifSites<'a> {
     motif: &'a DNAMotif,
+    cdf: &'a ScoreCDF,
     sigma: Vec<f64>,
     background: &'a BackgroundProb,
     seq: &'a [u8],
     cur_pos: usize,
     thres: f64,
+    report_pvalue: bool,
 }
 
 impl<'a> Iterator for MotifSites<'a> {
-    type Item = (usize, f64);
+    type Item = MotifScanResult;
 
+    /// Return the next motif hit.
+    ///
+    /// `score` is the natural-log likelihood-ratio match score for the motif
+    /// window. It is not the p-value used to filter hits. `log10_p_value` is
+    /// populated only when requested by `DNAMotifScanner::find`.
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if self.cur_pos + self.motif.size() >= self.seq.len() + 1 {
@@ -268,8 +372,13 @@ impl<'a> Iterator for MotifSites<'a> {
                 self.thres,
             );
             self.cur_pos += 1;
-            if search_result.is_some() {
-                return search_result;
+            if let Some((position, score)) = search_result {
+                let log10_p_value = if self.report_pvalue {
+                    Some(self.cdf.log10_upper_tail_prob(score))
+                } else {
+                    None
+                };
+                return Some(MotifScanResult { position, score, log10_p_value });
             }
         }
     }
@@ -314,9 +423,39 @@ letter-probability matrix: alength= 4 w= 11 nsites= 14 E= 3.2e-035
         let motif1: DNAMotif = motif1_str.parse().unwrap();
         let cdf = ScoreCDF::new(&motif1, &Default::default());
         assert!((cdf.prob_inverse(1.0 - 1e-4) - scores[0]).abs() < 1e-3);
+        for pvalue in [1e-2_f64, 1e-4_f64] {
+            let score = cdf.prob_inverse(1.0 - pvalue);
+            let log10_pvalue = cdf.log10_upper_tail_prob(score);
+            assert!((log10_pvalue - pvalue.log10()).abs() < 1e-10);
+        }
 
-        //let seq = "ATATCCCATCG";
-        //motif1.look_ahead_search(&bg, &motif1.optimal_scores_suffix(&bg), seq.as_bytes(), 20, 0.0);
-        //otif1.to_scanner(bg).find(seq.as_bytes(), 0.9).collect::<Vec<_>>();
+        let seq = b"ACCCAGGCTGG";
+        let hits = motif1
+            .clone()
+            .to_scanner(bg.clone())
+            .find(seq, 0.9, true)
+            .collect::<Vec<_>>();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].position, 0);
+        assert!(hits[0].log10_p_value.is_some());
+
+        let hits = motif1
+            .to_scanner(bg)
+            .find(seq, 0.9, false)
+            .collect::<Vec<_>>();
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].log10_p_value.is_none());
+    }
+
+    #[test]
+    fn log10_upper_tail_prob_uses_cdf() {
+        let cdf = ScoreCDF(vec![(0.0, 0.25), (1.0, 0.75), (2.0, 1.0)]);
+
+        assert_eq!(cdf.log10_upper_tail_prob(-1.0), 0.0);
+        assert_eq!(cdf.log10_upper_tail_prob(0.0), 0.0);
+        assert!((cdf.log10_upper_tail_prob(1.0) - 0.75_f64.log10()).abs() < 1e-12);
+        assert!((cdf.log10_upper_tail_prob(0.5) - 0.5_f64.log10()).abs() < 1e-12);
+        assert!((cdf.log10_upper_tail_prob(2.0) - 0.25_f64.log10()).abs() < 1e-12);
+        assert!((cdf.log10_upper_tail_prob(3.0) - 0.25_f64.log10()).abs() < 1e-12);
     }
 }
