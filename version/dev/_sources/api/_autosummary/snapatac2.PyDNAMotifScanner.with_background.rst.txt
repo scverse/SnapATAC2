@@ -1,0 +1,6 @@
+snapatac2.PyDNAMotifScanner.with\_background
+============================================
+
+.. currentmodule:: snapatac2
+
+.. automethod:: PyDNAMotifScanner.with_background
