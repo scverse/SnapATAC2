@@ -251,6 +251,19 @@ impl PyDNAMotifScanner {
     ///     occurrence, the natural-log likelihood-ratio score, and optionally
     ///     the log10 p-value.
     ///
+    /// Notes
+    /// -----
+    /// For long or information-rich motifs, returned hits will usually have
+    /// reported p-values below the user-defined cutoff. For short or degenerate
+    /// motifs, the best possible motif score may still have an estimated p-value
+    /// larger than the requested cutoff. In this case, `find` may return exact
+    /// or best-possible matches whose reported p-value is larger than `pvalue`.
+    /// This behavior is intentional: the `pvalue` argument is used to derive a
+    /// score cutoff, and the scanner keeps best-possible matches reachable even
+    /// when they are not statistically significant under the motif score CDF. If
+    /// strict p-value filtering is required, call `find(..., report_pvalue=True)`
+    /// and filter returned hits by the reported log10 p-value.
+    ///
     /// Examples
     /// --------
     /// >>> hits = scanner.find("ACGTACGT", pvalue=1e-5, report_pvalue=True)

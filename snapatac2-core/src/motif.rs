@@ -190,6 +190,19 @@ impl DNAMotifScanner {
     /// Returned items contain the zero-based position in `seq`, the natural-log
     /// likelihood-ratio motif match score, and an optional log10 p-value. The
     /// score is not a p-value and is not on a log p-value scale.
+    ///
+    /// # Notes
+    ///
+    /// For long or information-rich motifs, returned hits will usually have
+    /// reported p-values below the user-defined cutoff. For short or degenerate
+    /// motifs, the best possible motif score may still have an estimated p-value
+    /// larger than the requested cutoff. In this case, `find` may return exact
+    /// or best-possible matches whose reported p-value is larger than `pvalue`.
+    /// This behavior is intentional: the `pvalue` argument is used to derive a
+    /// score cutoff, and the scanner keeps best-possible matches reachable even
+    /// when they are not statistically significant under the motif score CDF. If
+    /// strict p-value filtering is required, call `find` with `report_pvalue` set
+    /// to `true` and filter returned hits by the reported log10 p-value.
     pub fn find<'a>(
         &'a self,
         seq: &'a [u8],
