@@ -1,7 +1,7 @@
 from __future__ import annotations
 from collections.abc import Callable
 
-from snapatac2.datasets import register_datasets
+from snapatac2._datasets_impl import load
 from pathlib import Path
 from pooch import Decompress
 
@@ -111,18 +111,14 @@ class Genome:
         return self._chrom_sizes
         
 GRCh37 = Genome(
-    fasta=lambda : register_datasets().fetch(
-        "gencode_v41_GRCh37.fa.gz", processor=Decompress(method = "gzip"), progressbar=True),
-    annotation=lambda : register_datasets().fetch(
-        "gencode_v41_GRCh37.gff3.gz", progressbar=True),
+    fasta=lambda: load('gencode_GRCh37', file="gencode_v41_GRCh37.fa.gz", processor=Decompress(method="gzip")),
+    annotation=lambda: load('gencode_GRCh37', file="gencode_v41_GRCh37.gff3.gz"),
     )
 hg19 = GRCh37
 
 GRCh38 = Genome(
-    fasta=lambda :  register_datasets().fetch(
-        "gencode_v41_GRCh38.fa.gz", processor=Decompress(method = "gzip"), progressbar=True),
-    annotation=lambda : register_datasets().fetch(
-        "gencode_v41_GRCh38.gff3.gz", progressbar=True),
+    fasta=lambda: load('gencode_GRCh38', file="gencode_v41_GRCh38.fa.gz", processor=Decompress(method="gzip")),
+    annotation=lambda: load('gencode_GRCh38', file="gencode_v41_GRCh38.gff3.gz"),
     chrom_sizes= {"chr1": 248956422, "chr2": 242193529, "chr3": 198295559,
                   "chr4": 190214555, "chr5": 181538259, "chr6": 170805979,
                   "chr7": 159345973, "chr8": 145138636, "chr9": 138394717,
@@ -136,10 +132,8 @@ GRCh38 = Genome(
 hg38 = GRCh38
 
 GRCm39 = Genome(
-    fasta=lambda : register_datasets().fetch(
-        "gencode_vM30_GRCm39.fa.gz", processor=Decompress(method = "gzip"), progressbar=True),
-    annotation=lambda : register_datasets().fetch(
-        "gencode_vM30_GRCm39.gff3.gz", progressbar=True),
+    fasta=lambda: load('gencode_GRCm39', file="gencode_vM30_GRCm39.fa.gz", processor=Decompress(method="gzip")),
+    annotation=lambda: load('gencode_GRCm39', file="gencode_vM30_GRCm39.gff3.gz"),
     chrom_sizes={
         "chr1": 195154279,
         "chr2": 181755017,
@@ -168,10 +162,8 @@ GRCm39 = Genome(
 mm39 = GRCm39
 
 GRCm38 = Genome(
-    fasta=lambda : register_datasets().fetch(
-        "gencode_vM25_GRCm38.fa.gz", processor=Decompress(method = "gzip"), progressbar=True),
-    annotation=lambda : register_datasets().fetch(
-        "gencode_vM25_GRCm38.gff3.gz", progressbar=True),
+    fasta=lambda: load('gencode_GRCm38', file="gencode_vM25_GRCm38.fa.gz", processor=Decompress(method="gzip")),
+    annotation=lambda: load('gencode_GRCm38', file="gencode_vM25_GRCm38.gff3.gz"),
     chrom_sizes={
         "chr1": 195471971,
         "chr2": 182113224,
