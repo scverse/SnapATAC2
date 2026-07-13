@@ -1,0 +1,102 @@
+base_url: https://exampledata.scverse.org/snapatac2
+
+datasets:
+
+  atac_pbmc_500:
+    type: snapatac2
+    fallback_urls:
+      atac_pbmc_500_fastqs.tar: https://cf.10xgenomics.com/samples/cell-atac/2.0.0/atac_pbmc_500_nextgem/atac_pbmc_500_nextgem_fastqs.tar
+      atac_pbmc_500.bam: https://cf.10xgenomics.com/samples/cell-atac/2.0.0/atac_pbmc_500_nextgem/atac_pbmc_500_nextgem_possorted_bam.bam
+      atac_pbmc_500.tsv.gz: https://cf.10xgenomics.com/samples/cell-atac/2.0.0/atac_pbmc_500_nextgem/atac_pbmc_500_nextgem_fragments.tsv.gz
+      atac_pbmc_500_downsample.tsv.gz: https://osf.io/download/wjv4b
+    files:
+      - {name: atac_pbmc_500_fastqs.tar,          s3_key: atac_pbmc_500_fastqs.tar,          sha256: 5897a4790d2841eff69c85b4bef2825166dd0cc2587da91f42eeed09000c5f47}
+      - {name: atac_pbmc_500.bam,                 s3_key: atac_pbmc_500.bam,                 sha256: 2fac56ca45186943a1daf9da71aed42263ad43a9428f2388fa5f3bcf6d2754ff}
+      - {name: atac_pbmc_500.tsv.gz,              s3_key: atac_pbmc_500.tsv.gz,              sha256: 196c5d7ee0169957417e9f4d5502abf1667ef99453328f8d290d4a7f3b205c6c}
+      - {name: atac_pbmc_500_downsample.tsv.gz,   s3_key: atac_pbmc_500_downsample.tsv.gz,   sha256: 6053cf4578a140bfd8ce34964602769dc5f5ec6b25ba4f2db23cdbd4681b0e2f}
+
+  atac_pbmc_5k:
+    type: snapatac2
+    fallback_urls:
+      atac_pbmc_5k.tsv.gz: https://cf.10xgenomics.com/samples/cell-atac/2.0.0/atac_pbmc_5k_nextgem/atac_pbmc_5k_nextgem_fragments.tsv.gz
+      atac_pbmc_5k.h5ad: https://osf.io/download/rj9nc/
+      atac_pbmc_5k_annotated.h5ad: https://osf.io/download/e9vc3/
+    files:
+      - {name: atac_pbmc_5k.tsv.gz,               s3_key: atac_pbmc_5k.tsv.gz,               sha256: 5fe44c0f8f76ce1534c1ae418cf0707ca5ef712004eee77c3d98d2d4b35ceaec}
+      - {name: atac_pbmc_5k.h5ad,                 s3_key: atac_pbmc_5k.h5ad,                 sha256: 92ae7f185cdec26517fd8d5acb60b2ce92c71e0ace824de35589c6d7942cab06}
+      - {name: atac_pbmc_5k_annotated.h5ad,       s3_key: atac_pbmc_5k_annotated.h5ad,       sha256: 592f1551c27d0cfe4d81e7febad624d6b7d3ebf977b0c3ea64e06b3f3d76f078}
+
+  pbmc_10k_multiome:
+    type: snapatac2
+    fallback_urls:
+      10x-Multiome-Pbmc10k-ATAC.h5ad: https://data.mendeley.com/api/datasets/dr2z4jbcx3/draft/files/165dfb5c-c557-42a0-bd21-1276d4d7b23e?a=758c37e5-4832-4c91-af89-9a1a83a051b3
+      10x-Multiome-Pbmc10k-RNA.h5ad: https://data.mendeley.com/api/datasets/dr2z4jbcx3/draft/files/d079a087-2913-4e29-979e-638e5932bd8c?a=758c37e5-4832-4c91-af89-9a1a83a051b3
+      pbmc_10k_atac.tsv.gz: https://cf.10xgenomics.com/samples/cell-arc/1.0.0/pbmc_granulocyte_sorted_10k/pbmc_granulocyte_sorted_10k_atac_fragments.tsv.gz
+    files:
+      - {name: 10x-Multiome-Pbmc10k-ATAC.h5ad,    s3_key: 10x-Multiome-Pbmc10k-ATAC.h5ad,    sha256: 24d030fb7f90453a0303b71a1e3e4e7551857d1e70072752d7fff9c918f77217}
+      - {name: 10x-Multiome-Pbmc10k-RNA.h5ad,     s3_key: 10x-Multiome-Pbmc10k-RNA.h5ad,     sha256: a25327acff48b20b295c12221a84fd00f8f3f486ff3e7bd090fdef241b996a22}
+      - {name: pbmc_10k_atac.tsv.gz,              s3_key: pbmc_10k_atac.tsv.gz,              sha256: 36e1ddeceb685404e509be43dcbad0be729ba598bd212a26e0597ff426b4ed47}
+
+  colon_transverse:
+    type: snapatac2
+    fallback_urls:
+      colon_transverse.tar: https://data.mendeley.com/api/datasets/dr2z4jbcx3/draft/files/eaa46151-a73f-4ef5-8b05-9648c8d1efda?a=758c37e5-4832-4c91-af89-9a1a83a051b3
+    files:
+      - {name: colon_transverse.tar,              s3_key: colon_transverse.tar,              sha256: 18c56bf405ec0ef8e0e2ea31c63bf2299f21bcb82c67f46e8f70f8d71c65ae0e}
+
+  HEA_cCRE:
+    type: snapatac2
+    fallback_urls:
+      HEA_cCRE.bed.gz: https://data.mendeley.com/api/datasets/dr2z4jbcx3/draft/files/91f93222-1a24-49a5-92e3-d9105ec53f91?a=758c37e5-4832-4c91-af89-9a1a83a051b3
+    files:
+      - {name: HEA_cCRE.bed.gz,                   s3_key: HEA_cCRE.bed.gz,                   sha256: d69ae94649201cd46ffdc634852acfccc317196637c1786aba82068618001408}
+
+  cisBP_human:
+    type: motif
+    fallback_urls:
+      cisBP_human.meme: https://osf.io/download/uk6vn
+    files:
+      - {name: cisBP_human.meme,                  s3_key: cisBP_human.meme,                  sha256: 8bf995450258e61cb1c535d5bf9656d580eb68ba68893fa36b77d17ee0730579}
+
+  Meuleman_2020:
+    type: motif
+    fallback_urls:
+      Meuleman_2020.meme: https://osf.io/download/6uet5/
+    files:
+      - {name: Meuleman_2020.meme,                s3_key: Meuleman_2020.meme,                sha256: 400dd60ca61dc8388aa0942b42c95920aad7f6bedf5324005cee7e84bcf5b6d0}
+
+  gencode_GRCh37:
+    type: snapatac2
+    fallback_urls:
+      gencode_v41_GRCh37.fa.gz: https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.fa.gz
+      gencode_v41_GRCh37.gff3.gz: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_41/GRCh37_mapping/gencode.v41lift37.basic.annotation.gff3.gz
+    files:
+      - {name: gencode_v41_GRCh37.fa.gz,          s3_key: gencode_v41_GRCh37.fa.gz,          sha256: ac73947d38df63ccb00724520a5c31d880c1ca423702ca7ccb7e6c2182a362d9}
+      - {name: gencode_v41_GRCh37.gff3.gz,        s3_key: gencode_v41_GRCh37.gff3.gz,        sha256: df96d3f0845127127cc87c729747ae39bc1f4c98de6180b112e71dda13592673}
+
+  gencode_GRCh38:
+    type: snapatac2
+    fallback_urls:
+      gencode_v41_GRCh38.fa.gz: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_41/GRCh38.primary_assembly.genome.fa.gz
+      gencode_v41_GRCh38.gff3.gz: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_41/gencode.v41.basic.annotation.gff3.gz
+    files:
+      - {name: gencode_v41_GRCh38.fa.gz,          s3_key: gencode_v41_GRCh38.fa.gz,          sha256: 4fac949d7021cbe11117ddab8ec1960004df423d672446cadfbc8cca8007e228}
+      - {name: gencode_v41_GRCh38.gff3.gz,        s3_key: gencode_v41_GRCh38.gff3.gz,        sha256: b82a655bdb736ca0e463a8f5d00242bedf10fa88ce9d651a017f135c7c4e9285}
+
+  gencode_GRCm38:
+    type: snapatac2
+    fallback_urls:
+      gencode_vM25_GRCm38.fa.gz: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M25/GRCm38.primary_assembly.genome.fa.gz
+      gencode_vM25_GRCm38.gff3.gz: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M25/gencode.vM25.basic.annotation.gff3.gz
+    files:
+      - {name: gencode_vM25_GRCm38.fa.gz,         s3_key: gencode_vM25_GRCm38.fa.gz,         sha256: 617b10dc7ef90354c3b6af986e45d6d9621242b64ed3a94c9abeac3e45f18c17}
+      - {name: gencode_vM25_GRCm38.gff3.gz,       s3_key: gencode_vM25_GRCm38.gff3.gz,       sha256: e8ed48bef6a44fdf0db7c10a551d4398aa341318d00fbd9efd69530593106846}
+
+  gencode_GRCm39:
+    type: snapatac2
+    fallback_urls:
+      gencode_vM30_GRCm39.fa.gz: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M30/GRCm39.primary_assembly.genome.fa.gz
+      gencode_vM30_GRCm39.gff3.gz: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M30/gencode.vM30.basic.annotation.gff3.gz
+    files:
+      - {name: gencode_vM30_GRCm39.fa.gz,         s3_key: gencode_vM30_GRCm39.fa.gz,         sha256: 3b923c06a0d291fe646af6bf7beaed7492bf0f6dd5309d4f5904623cab41b0aa}
+      - {name: gencode_vM30_GRCm39.gff3.gz,       s3_key: gencode_vM30_GRCm39.gff3.gz,       sha256: 6f433e2676e26569a678ce78b37e94a64ddd50a09479e433ad6f75e37dc82e48}

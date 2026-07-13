@@ -5,90 +5,8 @@ from typeguard import typechecked
 from pathlib import Path
 import pooch
 
-from snapatac2._snapatac2 import read_motifs, PyDNAMotif
-
-# This is a global variable used to store all datasets. It is initialized only once
-# when the data is requested.
-_datasets = None
-
-def register_datasets():
-    """Create or return the cached SnapATAC2 example-dataset registry.
-
-    Use this helper indirectly through dataset accessors such as `pbmc500` or
-    `cre_HEA`. Set the `SNAP_DATA_DIR` environment variable before calling a
-    dataset accessor to override the local cache directory.
-    """
-    global _datasets
-    if _datasets is None:
-        _datasets = pooch.create(
-            path=pooch.os_cache("snapatac2"),
-            base_url="http://renlab.sdsc.edu/kai/public_datasets/",
-            env="SNAP_DATA_DIR",  # The user can overwrite the storage path by setting this environment variable.
-            # The registry specifies the files that can be fetched
-            registry={
-                "atac_pbmc_500_fastqs.tar": "sha256:5897a4790d2841eff69c85b4bef2825166dd0cc2587da91f42eeed09000c5f47",
-                "atac_pbmc_500.bam": "sha256:2fac56ca45186943a1daf9da71aed42263ad43a9428f2388fa5f3bcf6d2754ff",
-                "atac_pbmc_500.tsv.gz": "sha256:196c5d7ee0169957417e9f4d5502abf1667ef99453328f8d290d4a7f3b205c6c",
-                "atac_pbmc_500_downsample.tsv.gz": "sha256:6053cf4578a140bfd8ce34964602769dc5f5ec6b25ba4f2db23cdbd4681b0e2f",
-
-                "atac_pbmc_5k.tsv.gz": "sha256:5fe44c0f8f76ce1534c1ae418cf0707ca5ef712004eee77c3d98d2d4b35ceaec",
-                "atac_pbmc_5k.h5ad": "sha256:92ae7f185cdec26517fd8d5acb60b2ce92c71e0ace824de35589c6d7942cab06",
-                "atac_pbmc_5k_annotated.h5ad": "sha256:592f1551c27d0cfe4d81e7febad624d6b7d3ebf977b0c3ea64e06b3f3d76f078",
-
-                "colon_transverse.tar": "sha256:18c56bf405ec0ef8e0e2ea31c63bf2299f21bcb82c67f46e8f70f8d71c65ae0e",
-                "HEA_cCRE.bed.gz": "sha256:d69ae94649201cd46ffdc634852acfccc317196637c1786aba82068618001408",
-
-                "10x-Multiome-Pbmc10k-ATAC.h5ad": "sha256:24d030fb7f90453a0303b71a1e3e4e7551857d1e70072752d7fff9c918f77217",
-                "10x-Multiome-Pbmc10k-RNA.h5ad": "sha256:a25327acff48b20b295c12221a84fd00f8f3f486ff3e7bd090fdef241b996a22",
-                "pbmc_10k_atac.tsv.gz": "md5:a959ef83dfb9cae6ff73ab0147d547d1",
-
-                # TF motifs
-                "cisBP_human.meme": "sha256:8bf995450258e61cb1c535d5bf9656d580eb68ba68893fa36b77d17ee0730579",
-                "Meuleman_2020.meme": "sha256:400dd60ca61dc8388aa0942b42c95920aad7f6bedf5324005cee7e84bcf5b6d0",
-
-                # Genome files
-                "gencode_v41_GRCh37.gff3.gz": "sha256:df96d3f0845127127cc87c729747ae39bc1f4c98de6180b112e71dda13592673",
-                "gencode_v41_GRCh37.fa.gz": "sha256:ac73947d38df63ccb00724520a5c31d880c1ca423702ca7ccb7e6c2182a362d9",
-                #"gencode_v41_GRCh37.fa.gz": "sha256:94330d402e53cf39a1fef6c132e2500121909c2dfdce95cc31d541404c0ed39e",
-                "gencode_v41_GRCh38.gff3.gz": "sha256:b82a655bdb736ca0e463a8f5d00242bedf10fa88ce9d651a017f135c7c4e9285",
-                "gencode_v41_GRCh38.fa.gz": "sha256:4fac949d7021cbe11117ddab8ec1960004df423d672446cadfbc8cca8007e228",
-                "gencode_vM25_GRCm38.gff3.gz": "sha256:e8ed48bef6a44fdf0db7c10a551d4398aa341318d00fbd9efd69530593106846",
-                "gencode_vM25_GRCm38.fa.gz": "sha256:617b10dc7ef90354c3b6af986e45d6d9621242b64ed3a94c9abeac3e45f18c17",
-                "gencode_vM30_GRCm39.gff3.gz": "sha256:6f433e2676e26569a678ce78b37e94a64ddd50a09479e433ad6f75e37dc82e48",
-                "gencode_vM30_GRCm39.fa.gz": "sha256:3b923c06a0d291fe646af6bf7beaed7492bf0f6dd5309d4f5904623cab41b0aa",
-            },
-            urls={
-                "atac_pbmc_500_fastqs.tar": "https://cf.10xgenomics.com/samples/cell-atac/2.0.0/atac_pbmc_500_nextgem/atac_pbmc_500_nextgem_fastqs.tar",
-                "atac_pbmc_500.tsv.gz": "https://cf.10xgenomics.com/samples/cell-atac/2.0.0/atac_pbmc_500_nextgem/atac_pbmc_500_nextgem_fragments.tsv.gz",
-                "atac_pbmc_500.bam": "https://cf.10xgenomics.com/samples/cell-atac/2.0.0/atac_pbmc_500_nextgem/atac_pbmc_500_nextgem_possorted_bam.bam",
-                "atac_pbmc_500_downsample.tsv.gz": "https://osf.io/download/wjv4b",
-
-                "atac_pbmc_5k.tsv.gz": "https://cf.10xgenomics.com/samples/cell-atac/2.0.0/atac_pbmc_5k_nextgem/atac_pbmc_5k_nextgem_fragments.tsv.gz", 
-                "atac_pbmc_5k.h5ad": "https://osf.io/download/rj9nc/",
-                "atac_pbmc_5k_annotated.h5ad": "https://osf.io/download/e9vc3/",
-
-                "10x-Multiome-Pbmc10k-ATAC.h5ad": "https://data.mendeley.com/api/datasets/dr2z4jbcx3/draft/files/165dfb5c-c557-42a0-bd21-1276d4d7b23e?a=758c37e5-4832-4c91-af89-9a1a83a051b3",
-                "10x-Multiome-Pbmc10k-RNA.h5ad": "https://data.mendeley.com/api/datasets/dr2z4jbcx3/draft/files/d079a087-2913-4e29-979e-638e5932bd8c?a=758c37e5-4832-4c91-af89-9a1a83a051b3", 
-                "pbmc_10k_atac.tsv.gz": "https://cf.10xgenomics.com/samples/cell-arc/1.0.0/pbmc_granulocyte_sorted_10k/pbmc_granulocyte_sorted_10k_atac_fragments.tsv.gz",
-
-                "colon_transverse.tar": "https://data.mendeley.com/api/datasets/dr2z4jbcx3/draft/files/eaa46151-a73f-4ef5-8b05-9648c8d1efda?a=758c37e5-4832-4c91-af89-9a1a83a051b3", 
-                "HEA_cCRE.bed.gz": "https://data.mendeley.com/api/datasets/dr2z4jbcx3/draft/files/91f93222-1a24-49a5-92e3-d9105ec53f91?a=758c37e5-4832-4c91-af89-9a1a83a051b3",
-
-                "cisBP_human.meme": "https://osf.io/download/uk6vn",
-                "Meuleman_2020.meme": "https://osf.io/download/6uet5/",
-
-                "gencode_v41_GRCh37.gff3.gz": "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_41/GRCh37_mapping/gencode.v41lift37.basic.annotation.gff3.gz",
-                "gencode_v41_GRCh37.fa.gz": "https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.fa.gz",
-                #"gencode_v41_GRCh37.fa.gz": "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_41/GRCh37_mapping/GRCh37.primary_assembly.genome.fa.gz",
-                "gencode_v41_GRCh38.gff3.gz": "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_41/gencode.v41.basic.annotation.gff3.gz",
-                "gencode_v41_GRCh38.fa.gz": "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_41/GRCh38.primary_assembly.genome.fa.gz",
-                "gencode_vM25_GRCm38.gff3.gz": "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M25/gencode.vM25.basic.annotation.gff3.gz",
-                "gencode_vM25_GRCm38.fa.gz": "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M25/GRCm38.primary_assembly.genome.fa.gz",
-                "gencode_vM30_GRCm39.gff3.gz": "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M30/gencode.vM30.basic.annotation.gff3.gz",
-                "gencode_vM30_GRCm39.fa.gz": "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M30/GRCm39.primary_assembly.genome.fa.gz",
-            },
-        )
-    return _datasets
+from snapatac2._snapatac2 import PyDNAMotif
+from snapatac2._datasets_impl import load
 
 @typechecked
 def pbmc500(type: Literal['fastq', 'bam', 'fragment'] = 'fragment', downsample: bool = False) -> Path | list[Path]:
@@ -129,16 +47,13 @@ def pbmc500(type: Literal['fastq', 'bam', 'fragment'] = 'fragment', downsample: 
     >>> fragment_file.name
     'atac_pbmc_500_downsample.tsv.gz'
     """
-    datasets = register_datasets()
     if type == 'fragment':
-        if downsample:
-            return Path(datasets.fetch("atac_pbmc_500_downsample.tsv.gz", progressbar=True))
-        else:
-            return Path(datasets.fetch("atac_pbmc_500.tsv.gz", progressbar=True))
+        file = "atac_pbmc_500_downsample.tsv.gz" if downsample else "atac_pbmc_500.tsv.gz"
+        return load('atac_pbmc_500', file=file)
     elif type == 'bam':
-        return Path(datasets.fetch("atac_pbmc_500.bam", progressbar=True))
+        return load('atac_pbmc_500', file="atac_pbmc_500.bam")
     elif type == 'fastq':
-        return [Path(f) for f in datasets.fetch("atac_pbmc_500_fastqs.tar", processor=pooch.Untar(), progressbar=True)]
+        return load('atac_pbmc_500', file="atac_pbmc_500_fastqs.tar", processor=pooch.Untar())
 
 @typechecked
 def pbmc5k(type: Literal['fragment', 'h5ad', 'annotated_h5ad'] = 'fragment') -> Path:
@@ -174,13 +89,12 @@ def pbmc5k(type: Literal['fragment', 'h5ad', 'annotated_h5ad'] = 'fragment') -> 
     >>> data.n_obs > 0
     True
     """
-    datasets = register_datasets()
     if type == "fragment":
-        return Path(datasets.fetch("atac_pbmc_5k.tsv.gz", progressbar=True))
+        return load('atac_pbmc_5k', file="atac_pbmc_5k.tsv.gz")
     elif type == "h5ad":
-        return Path(datasets.fetch("atac_pbmc_5k.h5ad", progressbar=True))
+        return load('atac_pbmc_5k', file="atac_pbmc_5k.h5ad")
     elif type == "annotated_h5ad":
-        return Path(datasets.fetch("atac_pbmc_5k_annotated.h5ad", progressbar=True))
+        return load('atac_pbmc_5k', file="atac_pbmc_5k_annotated.h5ad")
 
 @typechecked
 def pbmc10k_multiome(
@@ -220,14 +134,13 @@ def pbmc10k_multiome(
     >>> atac_file.suffix == rna_file.suffix == ".h5ad"
     True
     """
-    datasets = register_datasets()
     if modality == 'RNA':
-        return Path(datasets.fetch("10x-Multiome-Pbmc10k-RNA.h5ad"))
+        return load('pbmc_10k_multiome', file="10x-Multiome-Pbmc10k-RNA.h5ad")
     elif modality == 'ATAC':
         if type == 'fragment':
-            return Path(datasets.fetch("pbmc_10k_atac.tsv.gz"))
+            return load('pbmc_10k_multiome', file="pbmc_10k_atac.tsv.gz")
         else:
-            return Path(datasets.fetch("10x-Multiome-Pbmc10k-ATAC.h5ad"))
+            return load('pbmc_10k_multiome', file="10x-Multiome-Pbmc10k-ATAC.h5ad")
 
 def colon() -> list[tuple[str, Path]]:
     """Fetch five transverse colon scATAC-seq fragment datasets.
@@ -251,8 +164,8 @@ def colon() -> list[tuple[str, Path]]:
     >>> isinstance(name, str) and fragment_file.exists()
     True
     """
-    files = register_datasets().fetch("colon_transverse.tar", progressbar=True, processor = pooch.Untar())
-    return [(fl.split("/")[-1].split("_rep1_fragments")[0], Path(fl)) for fl in files]
+    files = load('colon_transverse', file="colon_transverse.tar", processor=pooch.Untar())
+    return [(f.name.split("_rep1_fragments")[0], f) for f in files]
 
 def cre_HEA() -> Path:
     """Fetch the curated human colon cis-regulatory element BED file.
@@ -272,7 +185,7 @@ def cre_HEA() -> Path:
     >>> cre_file.name
     'HEA_cCRE.bed.gz'
     """
-    return Path(register_datasets().fetch("HEA_cCRE.bed.gz"))
+    return load('HEA_cCRE', file="HEA_cCRE.bed.gz")
 
 def cis_bp(unique: bool = True) -> list[PyDNAMotif]:
     """Fetch CIS-BP transcription factor motifs for motif analysis.
@@ -309,7 +222,7 @@ def cis_bp(unique: bool = True) -> list[PyDNAMotif]:
     >>> len(motifs) > 0
     True
     """
-    motifs = read_motifs(register_datasets().fetch("cisBP_human.meme"))
+    motifs = load('cisBP_human')
     for motif in motifs:
         motif.name = motif.id.split('+')[0]
     if unique:
@@ -347,7 +260,7 @@ def Meuleman_2020() -> list[PyDNAMotif]:
     >>> hasattr(motifs[0], "family")
     True
     """
-    motifs = read_motifs(register_datasets().fetch("Meuleman_2020.meme"))
+    motifs = load('Meuleman_2020')
     for motif in motifs:
         motif.name = motif.id.split('_')[0]
         motif.family = motif.id.split('+')[-1]

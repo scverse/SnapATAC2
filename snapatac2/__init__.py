@@ -6,6 +6,8 @@ from . import tools as tl
 from . import metrics
 from . import plotting as pl
 from . import export as ex
+from . import datasets
+from . import genome
 
 from snapatac2._snapatac2 import (
     set_write_options, get_write_options,
@@ -16,9 +18,9 @@ from snapatac2._snapatac2 import (
 __version__ = version("snapatac2")
 
 __all__ = [
-    "pp", "tl", "pl", "ex", "metrics",
+    "pp", "tl", "pl", "ex", "metrics", "datasets", "genome",
     "set_write_options", "get_write_options",
-    "AnnData", "AnnDataSet", "concat", "read", "read_mtx", "read_dataset", "read_10x_mtx", 
+    "AnnData", "AnnDataSet", "concat", "read", "read_mtx", "read_dataset", "read_10x_mtx",
     "PyDNAMotif", "PyDNAMotifScanner", "PyDNAMotifTest", "read_motifs",
 ]
 
