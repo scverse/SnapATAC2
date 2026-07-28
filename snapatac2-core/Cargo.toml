@@ -22,7 +22,7 @@ flate2 = "1.0"
 tokio = "1.34"
 hora = "0.1"
 kdtree = "0.7"
-itertools = "0.14"
+itertools = "0.15"
 indexmap = "2"
 indicatif = { version = "0.18", features = ["rayon"] }
 lexical = "7"
