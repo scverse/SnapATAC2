@@ -84,7 +84,7 @@ test = [
 
 docs = [
   "sphinx >9.0.0,<10",
-  "pydata-sphinx-theme >0.16.0",
+  "pydata-sphinx-theme >0.18.0",
   "pandoc",
   "nbsphinx",
   "Pygments",

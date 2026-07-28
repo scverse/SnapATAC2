@@ -2,9 +2,13 @@
 
 ## Nightly (unreleased)
 
+## Release 2.10.0 (released July 28, 2026)
+
 ### Features:
 
   - Add "llms.txt" to the package installation directory.
+  - Remove support for python 3.11 and below.
+  - Add linux ARM wheel.
 
 ## Release 2.9.0 (released March 13, 2026)
 

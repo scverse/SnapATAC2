@@ -5,9 +5,14 @@
         "url": "https://scverse.org/SnapATAC2/version/dev/"
     },
     {
-        "name": "2.9 (stable)",
-        "version": "2.9",
+        "name": "2.10 (stable)",
+        "version": "2.10",
         "preferred": true,
+        "url": "https://scverse.org/SnapATAC2/version/2.10/"
+    },
+    {
+        "name": "2.9",
+        "version": "2.9",
         "url": "https://scverse.org/SnapATAC2/version/2.9/"
     },
     {
