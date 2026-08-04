@@ -151,4 +151,16 @@ def _harmony(data_matrix, batch_labels, **kwargs):
         batch_labels.columns.values,
         **kwargs,
     )
-    return harmony_out.Z_corr.T
+    corrected = np.asarray(harmony_out.Z_corr)
+    if (
+        corrected.ndim == 2
+        and corrected.shape[0] != data_matrix.shape[0]
+        and corrected.shape[1] == data_matrix.shape[0]
+    ):
+        corrected = corrected.T
+    if corrected.shape != data_matrix.shape:
+        raise ValueError(
+            "Unexpected Harmony output shape: "
+            f"expected {data_matrix.shape}, got {corrected.shape}"
+        )
+    return corrected
