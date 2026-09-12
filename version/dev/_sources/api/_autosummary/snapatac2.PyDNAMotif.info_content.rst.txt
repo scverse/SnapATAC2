@@ -1,0 +1,6 @@
+snapatac2.PyDNAMotif.info\_content
+==================================
+
+.. currentmodule:: snapatac2
+
+.. automethod:: PyDNAMotif.info_content

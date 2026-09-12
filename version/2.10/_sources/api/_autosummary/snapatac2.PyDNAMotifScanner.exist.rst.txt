@@ -1,0 +1,6 @@
+snapatac2.PyDNAMotifScanner.exist
+=================================
+
+.. currentmodule:: snapatac2
+
+.. automethod:: PyDNAMotifScanner.exist

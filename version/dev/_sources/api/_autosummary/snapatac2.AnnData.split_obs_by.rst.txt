@@ -1,0 +1,6 @@
+snapatac2.AnnData.split\_obs\_by
+================================
+
+.. currentmodule:: snapatac2
+
+.. automethod:: AnnData.split_obs_by
