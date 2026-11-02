@@ -19,11 +19,35 @@ A fast, scalable and versatile tool for analysis of single-cell omics data.
 Nature Methods, 1–11. https://doi.org/10.1038/s41592-023-02139-9
 
 .. toctree::
-   :maxdepth: 3
+   :caption: Getting started
+   :maxdepth: 1
    :hidden:
 
    install
+   Quickstart <tutorials/pbmc>
+
+.. toctree::
+   :caption: Guides
+   :maxdepth: 2
+   :hidden:
+
    tutorials/index
+   Learn <https://kzhang.org/epigenomics-analysis/>
+
+.. toctree::
+   :caption: Reference
+   :maxdepth: 2
+   :hidden:
+
    api/index
-   Development<develop>
-   Release notes<changelog>
+
+.. toctree::
+   :caption: Project
+   :maxdepth: 1
+   :hidden:
+
+   Release notes <changelog>
+   Development <develop>
+   citation
+   GitHub <https://github.com/scverse/SnapATAC2>
+   Discourse <https://discourse.scverse.org/>
