@@ -2,11 +2,9 @@
 
 import re
 import sys
-import warnings
-import os
-import subprocess
 
 import snapatac2
+from scverse_doc.registry import intersphinx
 
 # -- Software version --------------------------------------------------------
 
@@ -28,6 +26,8 @@ print(f'Building documentation for SnapATAC2 {release} (short version: {version}
 # -- Project information -----------------------------------------------------
 
 project = 'SnapATAC2'
+source_repository = 'https://github.com/scverse/SnapATAC2'
+source_code_directory = ''
 copyright = '2022-2026, Kai Zhang'
 author = 'Kai Zhang'
 
@@ -52,6 +52,11 @@ extensions = [
     "sphinx.ext.linkcode",
     "sphinx_autodoc_typehints",
     "sphinx_plotly_directive",
+    # The scverse theme, source links and package registry, without scverse_doc's extension stack:
+    # that would bring myst-nb, which takes the notebooks over from nbsphinx.
+    "scverse_doc.theme",
+    "scverse_doc.source",
+    "scverse_doc.registry",
 ]
 
 source_suffix = {
@@ -89,15 +94,9 @@ napoleon_custom_sections = [('Params', 'Parameters')]
 todo_include_todos = False
 
 intersphinx_mapping = {
-    "anndata": ("https://anndata.readthedocs.io/en/stable/", None),
+    **intersphinx(),
     "ipython": ("https://ipython.readthedocs.io/en/stable/", None),
-    "matplotlib": ("https://matplotlib.org/", None),
-    "numpy": ("https://numpy.org/doc/stable/", None),
-    "pandas": ("https://pandas.pydata.org/docs/", None),
-    "python": ("https://docs.python.org/3", None),
-    "scipy": ("https://docs.scipy.org/doc/scipy/reference/", None),
     "sklearn": ("https://scikit-learn.org/stable/", None),
-    "scanpy": ("https://scanpy.readthedocs.io/en/stable/", None),
 }
 
 # Configure autodoc to handle import errors gracefully
@@ -140,7 +139,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # -- Options for HTML output -------------------------------------------------
 
-html_theme = 'pydata_sphinx_theme'
+html_theme = 'scverse'
 html_show_sphinx = False
 html_show_sourcelink = False
 html_static_path = ['_static']
@@ -149,84 +148,11 @@ html_css_files = [
 ]
 
 html_theme_options = {
-    "logo": {
-        "text": "SnapATAC2",
-        #"image_dark": "_static/logo-dark.svg",
-        "alt_text": "SnapATAC2",
-    },
-
-    "github_url": "https://github.com/scverse/SnapATAC2",
-    "external_links": [
-        {"name": "Learn", "url": "https://kzhang.org/epigenomics-analysis/"}
-    ],
-    "header_links_before_dropdown": 6,
-
-    "navbar_center": ["version-switcher", "navbar-nav"],
-    "navbar_end": ["theme-switcher", "navbar-icon-links"],
-    "navbar_align": "left",
+    # The docs are versioned on GitHub Pages rather than Read the Docs, so the sidebar takes pydata's switcher.
+    "primary_sidebar_end": ["version-switcher"],
     "show_version_warning_banner": switcher_version == "dev",
-
     "switcher": {
         "version_match": switcher_version,
         "json_url": "https://raw.githubusercontent.com/scverse/SnapATAC2/refs/heads/main/docs/_static/versions.json",
     },
 }
-
-commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip().decode('ascii')
-code_url = f"https://github.com/scverse/SnapATAC2/blob/{commit}"
-
-# based on numpy doc/source/conf.py
-def linkcode_resolve(domain, info):
-    """
-    Determine the URL corresponding to Python object
-    """
-    import inspect
-
-    if domain != "py":
-        return None
-
-    modname = info["module"]
-    fullname = info["fullname"]
-
-    submod = sys.modules.get(modname)
-    if submod is None:
-        return None
-
-    obj = submod
-    for part in fullname.split("."):
-        try:
-            with warnings.catch_warnings():
-                # Accessing deprecated objects will generate noisy warnings
-                warnings.simplefilter("ignore", FutureWarning)
-                obj = getattr(obj, part)
-        except AttributeError:
-            return None
-
-    try:
-        fn = inspect.getsourcefile(inspect.unwrap(obj))
-    except TypeError:
-        try:  # property
-            fn = inspect.getsourcefile(inspect.unwrap(obj.fget))
-        except (AttributeError, TypeError):
-            fn = None
-    if not fn:
-        return None
-
-    try:
-        source, lineno = inspect.getsourcelines(obj)
-    except TypeError:
-        try:  # property
-            source, lineno = inspect.getsourcelines(obj.fget)
-        except (AttributeError, TypeError):
-            lineno = None
-    except OSError:
-        lineno = None
-
-    if lineno:
-        linespec = f"#L{lineno}-L{lineno + len(source) - 1}"
-    else:
-        linespec = ""
-
-    fn = os.path.relpath(fn, start=os.path.dirname(snapatac2.__file__))
-
-    return f"{code_url}/snapatac2-python/python/snapatac2/{fn}{linespec}"
